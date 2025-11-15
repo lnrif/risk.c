@@ -1,32 +1,27 @@
-//! Result is part of std lib.
-//! 
-//! Used for wrapper over `Error` and `Ok` types.
-
-const {*} = Result::{Ok, Err};
-
-const Result[E: type] = enum { Ok(()), Err(E) };
-const Result[T: type, E: type] = enum { Ok(T), Err(E) };
+let {*} = Result::{Ok, Err};
+let Result[E: type] = enum { Ok(()), Err(E) };
+let Result[T: type, E: type] = enum { Ok(T), Err(E) };
 
 fn main() {
-	let mut file = File::open("a.txt")!;
-	file.write("Hello world!\n")!;
-	file.flush()!;
-	file.close()!;
+	let mut file = File::open("a.txt") orelse @panic();
+	file.write("Hello world!\n") orelse @panic();
+	file.flush() orelse @panic();
+	file.close() orelse @panic();
 }
 
-pub const File = struct {
+pub let File = struct {
 	handle: usize,
 	comptime flushed: bool,
 };
 
 impl File {
-	pub fn open(path: &[:0]u8) -> Result[File, OpenError] {
+	pub fn open(path: &[:0]u8) Result[File, OpenError] {
 		Self { handle: ..., flushed: true }
 	}
 }
 
-impl File {
-	pub fn write(&mut self, bytes: &[]u8) -> Result[CloseError] {
+impl File {	
+	pub fn write(&mut self, bytes: &[]u8) Result[CloseError] {
 		if ... return Err(CloseError::...);
 		self.flushed = false;
 		return Ok();
@@ -34,8 +29,8 @@ impl File {
 }
 
 impl File if !self.flushed {
-	[drop]
-	pub fn flush(&mut self) -> Result[FlushError] {
+	[|drop|]
+	pub fn flush(&mut self) Result[FlushError] {
 		if ... return Err(FlushError::...);
 		self.flushed = true;
 		return Ok();
@@ -43,13 +38,13 @@ impl File if !self.flushed {
 }
 
 impl File if self.flushed {
-	[drop]
+	[|drop|]
 	pub fn close(self) -> Result[CloseError] {
 		if ... return Err(CloseError::...);
 		return Ok();
 	}
-}
+};
 
-const OpenError  = enum { ... };
-const WriteError = enum { ... };
-const FlushError = enum { ... };
+let OpenError  = enum { ... };
+let WriteError = enum { ... };
+let FlushError = enum { ... };
