@@ -33,24 +33,24 @@ typedef unsigned long long rk_usz;
 typedef float              rk_f32;
 typedef double             rk_f64;
 
-#define RK_I8_MIN        -128i8
-#define RK_I16_MIN       -32768i16
-#define RK_I32_MIN       -2147483648i32
-#define RK_I64_MIN       -9223372036854775808i64
+#define RK_I8_MIN  (-128i8)
+#define RK_I16_MIN (-32768i16)
+#define RK_I32_MIN (-2147483648i32)
+#define RK_I64_MIN (-9223372036854775808i64)
 
-#define RK_I8_MAX        127i8
-#define RK_I16_MAX       32767i16
-#define RK_I32_MAX       2147483647i32
-#define RK_I64_MAX       9223372036854775807i64
+#define RK_I8_MAX  127i8
+#define RK_I16_MAX 32767i16
+#define RK_I32_MAX 2147483647i32
+#define RK_I64_MAX 9223372036854775807i64
 
-#define RK_U8_MAX        0xffui8
-#define RK_U16_MAX       0xffffui16
-#define RK_U32_MAX       0xffffffffui32
-#define RK_U64_MAX       0xffffffffffffffffui64
+#define RK_U8_MAX  0xffui8
+#define RK_U16_MAX 0xffffui16
+#define RK_U32_MAX 0xffffffffui32
+#define RK_U64_MAX 0xffffffffffffffffui64
 
-#define RK_ISZ_MIN       RK_I64_MIN
-#define RK_ISZ_MAX       RK_I64_MAX
-#define RK_USZ_MAX       RK_U64_MAX
+#define RK_ISZ_MIN RK_I64_MIN
+#define RK_ISZ_MAX RK_I64_MAX
+#define RK_USZ_MAX RK_U64_MAX
 
 ////////////////////////////////////////
 // Colors
@@ -618,15 +618,27 @@ char const *rk_pb_tail(RkPathBuf const *path, rk_usz n) {
     }
 }
 
-static inline void
-rk_pb_dealloc(RkPathBuf path) {
+static inline
+void rk_pb_dealloc(RkPathBuf path) {
     RK_LIST_DEALLOC(path.ptr);
+}
+
+static inline
+void rk_console_init() {
+    if(!setlocale(LC_ALL, "en_US.UTF-8")) setlocale(LC_ALL, "");
+    
+    #ifdef _WIN32
+        SetConsoleOutputCP(CP_UTF8);
+        SetConsoleCP(CP_UTF8);
+    #endif
 }
 
 // BUILD: clang -Wall -Wextra -Wno-unused-function risk.c -o risk.exe
 
 rk_i32
 main(void) {
+    rk_console_init();
+    
     RkStrBuf buf = rk_sb_alloc(RK_PAGE_SIZE);
     rk_sb_printf(&buf, RK_RED_BOLD "RISK" RK_WHITE_BOLD " is " RK_GREEN_BOLD_ITALIC "self-known" RK_CLEAN "\n");
     // RkPathBuf path = rk_pb_from_cstr("examples/main.rk");
