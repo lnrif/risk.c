@@ -9,6 +9,11 @@ fn main() {
 	file.close() orelse @panic();
 }
 
+[|inline(always)|]
+fn save(path: &[~:0]u8, buf: &[]u8) {
+    @todo();
+}
+
 pub let File = struct {
 	handle: usize,
 	comptime flushed: bool,

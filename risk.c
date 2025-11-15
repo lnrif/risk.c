@@ -368,34 +368,47 @@ RK_LIST(
     rk_sb, char, rk_usz, RK_USZ_MAX,
 )
 
-#define rk_str(p, l) ((RK_Str){.ptr = p, .len = l})
+static inline bool
+rk_ch_is_space(rk_u8 c) {
+    return c == ' ' || c == '\t'|| c == '\r' || c == '\n';
+}
 
-static void
-rk_sb_vprintf(RkStrBuf *str, char const *fmt, va_list args) {
-    int len = vsnprintf(NULL, 0, fmt, args);
-    rk_sb_reserve(str, len + 1);
-    vsnprintf(&str->ptr[str->len], len + 1, fmt, args);
-    str->len += len;
+static inline void
+rk_sb_strip_right(RkStrBuf *buf) {
+    for (;;) {
+        if (buf->len == 0) break;
+        rk_u8 c = buf->ptr[buf->len - 1];
+        if (!rk_ch_is_space(c)) break;
+        buf->len -= 1;
+    }
 }
 
 static void
-rk_sb_printf(RkStrBuf *string, char const *fmt, ...) {
+rk_sb_vprintf(RkStrBuf *buf, char const *fmt, va_list args) {
+    int len = vsnprintf(NULL, 0, fmt, args);
+    rk_sb_reserve(buf, len + 1);
+    vsnprintf(&buf->ptr[buf->len], len + 1, fmt, args);
+    buf->len += len;
+}
+
+static void
+rk_sb_printf(RkStrBuf *buf, char const *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    rk_sb_vprintf(string, fmt, args);
+    rk_sb_vprintf(buf, fmt, args);
     va_end(args);
 }
 
 static void
-rk_sb_vprintf_repeat(RkStrBuf *string, rk_u32 n, char const *fmt, va_list args) {
+rk_sb_vprintf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, va_list args) {
     if (n == 0) return;
 
     int fmt_len = vsnprintf(NULL, 0, fmt, args);
     RK_ASSERT(fmt_len >= 0, "fmt error");
-    rk_sb_reserve(string, fmt_len * n + 1);
+    rk_sb_reserve(buf, fmt_len * n + 1);
 
-    char *start = &string->ptr[string->len];
-    char *end = &string->ptr[string->len + fmt_len];
+    char *start = &buf->ptr[buf->len];
+    char *end = &buf->ptr[buf->len + fmt_len];
     rk_usz len = end - start;
 
     vsnprintf(start, fmt_len + 1, fmt, args);
@@ -403,33 +416,226 @@ rk_sb_vprintf_repeat(RkStrBuf *string, rk_u32 n, char const *fmt, va_list args) 
         memcpy(&start[len * i], start, len);
     }
 
-    string->len += fmt_len * n;
+    buf->len += fmt_len * n;
 }
 
 static void
-rk_sb_printf_repeat(RkStrBuf *string, rk_u32 n, char const *fmt, ...) {
+rk_sb_printf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    rk_sb_vprintf_repeat(string, n, fmt, args);
+    rk_sb_vprintf_repeat(buf, n, fmt, args);
     va_end(args);
 }
 
 static inline void
-rk_sb_flush(RkStrBuf *string, FILE *stream) {
-    if (string->len == 0) return;
-    fprintf(stream, "%.*s", (rk_u32)string->len, string->ptr);
-    string->len = 0;
+rk_sb_flush(RkStrBuf *buf, FILE *stream) {
+    if (buf->len == 0) return;
+    fprintf(stream, "%.*s", (rk_u32)buf->len, buf->ptr);
+    buf->len = 0;
+}
+
+////////////////////////////////////////
+// File & Path
+
+#include <direct.h>
+#include <string.h>
+
+typedef struct {
+    char  *ptr;
+    rk_usz len;
+    rk_usz cap;
+} RkPathBuf;
+
+#define RK_PB_EMPTY (RkPathBuf){.ptr = NULL, .len = 0, .cap = 0}
+
+typedef enum {
+    RK_FILE_OK,
+    RK_FILE_PERMISSION_DENIED,
+    RK_FILE_EXPECTED_FILE,
+    RK_FILE_NOT_FOUND,
+    RK_FILE_UNKNOWN_ERROR,
+} RkFileResult;
+
+typedef struct {
+    rk_u8 *ptr;
+    rk_usz len;
+} RkBytes;
+
+static inline RkStrBuf
+rk_sb_from_bytes(RkBytes bytes) {
+    return (RkStrBuf){
+        .ptr = (void*)bytes.ptr,
+        .len = bytes.len,
+        .cap = bytes.len,
+    };
+}
+
+typedef struct {
+    RkFileResult result;
+    RkBytes bytes;
+} RkFile;
+
+static char *
+rk_file_result_as_cstr(RkFileResult kind) {
+    switch (kind) {
+        case RK_FILE_OK:             return "ok";
+        case RK_FILE_PERMISSION_DENIED: return "permission denied";
+        case RK_FILE_EXPECTED_FILE:     return "expected file, but found directory";
+        case RK_FILE_NOT_FOUND:         return "file not found";
+        case RK_FILE_UNKNOWN_ERROR:     return "failed read file (unknown reason)";
+    }
+}
+
+static RkFileResult
+file_result_from_errno(errno_t err) {
+    switch(err) {
+        case 0:      return RK_FILE_OK;
+        case EPERM:  return RK_FILE_PERMISSION_DENIED;
+        case ENOENT: return RK_FILE_NOT_FOUND;
+        case EACCES: return RK_FILE_EXPECTED_FILE;
+        default:     return RK_FILE_UNKNOWN_ERROR;
+    }
+}
+
+static inline FILE *
+open_file_or_failed(char const *path) {
+    FILE *file;
+    errno_t err = fopen_s(&file, path, "wb");
+    RK_ASSERT(err == 0 && file != NULL, "failed open file");
+    return file;
+}
+
+static inline void
+rk_file_save(
+    char const * const path,
+    rk_u8 const * const buf,
+    rk_usz const len
+) {
+    FILE *file;
+
+    errno_t err = fopen_s(&file, (char *)path, "wb");
+    RK_ASSERT(err == 0 && file != NULL, "failed open file");
+    
+    size_t bytes_written = fwrite(buf, 1, len, file);
+    RK_ASSERT(bytes_written == len, "failed write in file");
+    
+    fclose(file);
+}
+
+static RkFile
+rk_file_load(char const *path) {
+    FILE *file = NULL;
+    errno_t err = fopen_s(&file, path, "rb");
+
+    RkFileResult kind = file_result_from_errno(err);
+    if (kind != RK_FILE_OK) return (RkFile){.result = kind, .bytes = {0}};
+
+    fseek(file, 0, SEEK_END);
+    rk_usz file_len = ftell(file);
+    RK_ASSERT(file_len != RK_U32_MAX, "failed getting file len");
+    fseek(file, 0, SEEK_SET);
+
+    rk_u8 *buf = RK_ALLOC_ARRAY(file_len, rk_u8);
+    RK_ASSERT(buf != NULL, "failed allocating buf");
+
+    rk_usz read = fread(buf, 1, file_len, file);
+    RK_ASSERT(read == file_len, "incomplete reading file");
+
+    RK_ASSERT(fclose(file) == 0, "failed close file");
+
+    RkBytes bytes = {.ptr = buf, .len = file_len};
+    return (RkFile){.result = RK_FILE_OK, .bytes = bytes};
+}
+
+static void
+rk_print_error(
+    char const *path,
+    rk_u32 const line,
+    rk_u32 const column,
+    char const *fmt, ...
+) {
+    printf(RK_RED_BOLD "error" RK_WHITE_BOLD ": ");
+
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    
+    printf("\n" RK_CYAN_BOLD " --> %s", path);
+    if (line != 0 && column != 0) printf(":%hu:%hu", line, column);
+    printf("\n" RK_CLEAN);
+}
+
+static inline RkBytes
+rk_file_load_or_exit(char const *path) {
+    RkFile load = rk_file_load(path);
+    if (load.result == RK_FILE_OK) return load.bytes;
+    rk_print_error(path, 0, 0, "%s", rk_file_result_as_cstr(load.result));
+    printf("\n");
+    exit(1);
+}
+
+static inline RkPathBuf
+rk_pb_from_cstr(char const *ptr) {
+    RkPathBuf path = RK_PB_EMPTY;
+    RK_LIST_EXTEND(path.ptr, ptr, path.len, path.cap, strlen(ptr) + 1);
+    return path;
+}
+
+static void
+rk_pb_join(RkPathBuf *path, RkStrRef add) {
+    if (add.len == 0) return;
+
+    for (rk_usz i = 0; i <= add.len; i += 1) {
+        RK_ASSERT(add.ptr[i] != '\0', "unexpected NULL in slice");
+    }
+
+    rk_usz reserve_len = add.len + 1;
+    if (path->len > 0) {
+        path->len -= 1;   // strip NULL
+        reserve_len += 1; // add slash
+    }
+    RK_LIST_RESERVE(path->ptr, path->len, path->cap, reserve_len);
+
+    if (path->len > 0) RK_LIST_PUSH(path->ptr, path->len, path->cap, '\\');
+    RK_LIST_EXTEND(path->ptr, add.ptr, path->len, path->cap, add.len);
+    RK_LIST_PUSH(path->ptr, path->len, path->cap, '\0');
+}
+
+static inline char const *
+rk_pb_tail(RkPathBuf const *path, rk_usz n) {
+    RK_ASSERT(path->len > 0, "expected non-empty path");
+    RK_ASSERT(n > 0, "expected at least 1 component");
+
+    char const * const start = &path->ptr[0];
+    char const *peek = &path->ptr[path->len];
+
+    for (;;) {
+        peek -= 1;
+        if (peek <= start) return start;
+        if (*peek == '\\' || *peek == '/') n -= 1;
+        if (n == 0) return peek + 1;
+    }
+}
+
+static inline void
+rk_pb_dealloc(RkPathBuf path) {
+    RK_LIST_DEALLOC(path.ptr);
 }
 
 // BUILD: clang -Wall -Wextra -Wno-unused-function risk.c -o risk.exe
 
 rk_i32
 main(void) {
-    RkStrBuf string = rk_sb_alloc(RK_PAGE_SIZE);
-    rk_sb_printf(&string, RK_RED_BOLD "RISK" RK_WHITE_BOLD " is " RK_GREEN_BOLD_ITALIC "self-known" RK_CLEAN "\n");
-    
-    rk_sb_flush(&string, stdout);
-    rk_sb_dealloc(string);
+    RkStrBuf buf = rk_sb_alloc(RK_PAGE_SIZE);
+    rk_sb_printf(&buf, RK_RED_BOLD "RISK" RK_WHITE_BOLD " is " RK_GREEN_BOLD_ITALIC "self-known" RK_CLEAN "\n");
+    // RkPathBuf path = rk_pb_from_cstr("examples/main.rk");
+    RkBytes bytes = rk_file_load_or_exit("examples/main.rk");
+    RkStrBuf src = rk_sb_from_bytes(bytes);
+    rk_sb_strip_right(&src);
+    rk_sb_printf(&buf, RK_MAGENTA_BOLD "```\n%.*s\n```" RK_CLEAN, (rk_u32)src.len, src.ptr);
+    rk_sb_flush(&buf, stdout);
+    rk_sb_dealloc(buf);
 }
 
 #endif // RISK_H
