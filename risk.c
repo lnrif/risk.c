@@ -84,8 +84,8 @@ typedef struct {
     rk_u32 line;
 } RK_Caller;
 
-static void
-RK_caller_println(RK_Caller caller) {
+static
+void RK_caller_println(RK_Caller caller) {
     printf(RK_CYAN_BOLD " --> %s:%i\n" RK_CLEAN, caller.file, caller.line);
 }
 
@@ -128,15 +128,15 @@ RK_caller_println(RK_Caller caller) {
 #define RK_FAILED(type, fmt, args...)                  rk_failed(RK_CALLER_HERE, type, fmt, args)
 #define RK_FAILED_ASSERT(expr, expr_len, fmt, args...) rk_failed_assert(RK_CALLER_HERE, expr, expr_len, fmt, args)
 
-static inline rk_u32
-RK_decimal_len(rk_usz x) {
+static inline
+rk_u32 RK_decimal_len(rk_usz x) {
     rk_u32 n = 1;
     while (x >= 10) { x /= 10; n += 1; }
     return n;
 }
 
-static noreturn void
-rk_failed(
+static noreturn
+void rk_failed(
     RK_Caller caller,
     char const *type,
     char const *fmt, ...
@@ -153,8 +153,8 @@ rk_failed(
     exit(1);
 }
 
-static noreturn void
-rk_failed_assert(
+static noreturn
+void rk_failed_assert(
     RK_Caller caller,
     char const *expr,
     rk_usz len,
@@ -279,83 +279,83 @@ rk_failed_assert(
         rk_usz   len;                                                       \
     } SLICE;                                                                \
                                                                             \
-    static NAME                                                             \
-    PREFIX##_alloc(rk_usz cap) {                                            \
+    static                                                                  \
+    NAME PREFIX##_alloc(rk_usz cap) {                                       \
         NAME buf = {0};                                                     \
         RK_LIST_ALLOC(buf.ptr, buf.len, buf.cap, cap);                      \
         return buf;                                                         \
     }                                                                       \
                                                                             \
-    static inline void                                                      \
-    PREFIX##_dealloc(NAME buf) {                                            \
+    static inline                                                           \
+    void PREFIX##_dealloc(NAME buf) {                                       \
         RK_LIST_DEALLOC(buf.ptr);                                           \
     }                                                                       \
                                                                             \
-    static void                                                             \
-    PREFIX##_reserve(NAME *buf, rk_usz add) {                               \
+    static                                                                  \
+    void PREFIX##_reserve(NAME *buf, rk_usz add) {                          \
         RK_LIST_RESERVE(buf->ptr, buf->len, buf->cap, add);                 \
     }                                                                       \
                                                                             \
-    static SLICE                                                            \
-    PREFIX##_extend(NAME *buf, SLICE slice) {                               \
+    static                                                                  \
+    SLICE PREFIX##_extend(NAME *buf, SLICE slice) {                         \
         rk_usz start = buf->len;                                            \
         RK_LIST_EXTEND(buf->ptr, slice.ptr, buf->len, buf->cap, slice.len); \
         return (SLICE){.ptr = &buf->ptr[start], .len = slice.len};          \
     }                                                                       \
                                                                             \
-    static INDEXED                                                          \
-    PREFIX##_extend_indexed(NAME *buf, SLICE slice) {                       \
+    static                                                                  \
+    INDEXED PREFIX##_extend_indexed(NAME *buf, SLICE slice) {               \
         INDEX start = buf->len;                                             \
         PREFIX##_extend(buf, slice);                                        \
         return (INDEXED){.start = start, .len = slice.len};                 \
     }                                                                       \
                                                                             \
-    static SLICE                                                            \
-    PREFIX##_slice(NAME const *buf, rk_usz start, rk_usz len) {             \
+    static                                                                  \
+    SLICE PREFIX##_slice(NAME const *buf, rk_usz start, rk_usz len) {       \
         RK_ASSERT(start + len <= buf->len, "");                             \
         return (SLICE){.ptr = &buf->ptr[start], .len = len};                \
     }                                                                       \
                                                                             \
-    static void                                                             \
-    PREFIX##_push(NAME *buf, TYPE v) {                                      \
+    static                                                                  \
+    void PREFIX##_push(NAME *buf, TYPE v) {                                 \
         RK_LIST_PUSH(buf->ptr, buf->len, buf->cap, v);                      \
     }                                                                       \
                                                                             \
-    static INDEX                                                            \
-    PREFIX##_push_id(NAME *buf, TYPE v) {                                   \
+    static                                                                  \
+    INDEX PREFIX##_push_id(NAME *buf, TYPE v) {                             \
         RK_ASSERT(buf->len < INDEX_MAX, #NAME " overflow");                 \
         INDEX id = (INDEX)buf->len;                                         \
         RK_LIST_PUSH(buf->ptr, buf->len, buf->cap, v);                      \
         return id;                                                          \
     }                                                                       \
                                                                             \
-    static TYPE                                                             \
-    PREFIX##_pop(NAME *buf) {                                               \
+    static                                                                  \
+    TYPE PREFIX##_pop(NAME *buf) {                                          \
         RK_ASSERT(buf->len != 0, #NAME " is empty");                        \
         buf->len -= 1;                                                      \
         return buf->ptr[buf->len];                                          \
     }                                                                       \
                                                                             \
-    static void                                                             \
-    PREFIX##_pop_n(NAME *buf, rk_usz n) {                                   \
+    static                                                                  \
+    void PREFIX##_pop_n(NAME *buf, rk_usz n) {                              \
         RK_ASSERT(buf->len >= n, #NAME " not have %llu items", n);          \
         buf->len -= n;                                                      \
     }                                                                       \
                                                                             \
-    static inline TYPE                                                      \
-    PREFIX##_at(NAME const *buf, rk_usz index) {                            \
+    static inline                                                           \
+    TYPE PREFIX##_at(NAME const *buf, rk_usz index) {                       \
         RK_ASSERT(index < buf->len, "index out of bounds");                 \
         return buf->ptr[index];                                             \
     }                                                                       \
                                                                             \
-    static inline TYPE *                                                    \
-    PREFIX##_at_mut(NAME *buf, rk_usz index) {                              \
+    static inline                                                           \
+    TYPE * PREFIX##_at_mut(NAME *buf, rk_usz index) {                       \
         RK_ASSERT(index < buf->len, "index `%llu` out of bounds", index);   \
         return &buf->ptr[index];                                            \
     }                                                                       \
                                                                             \
-    static inline INDEX                                                     \
-    PREFIX##_id(NAME const *buf) {                                          \
+    static inline                                                           \
+    INDEX PREFIX##_id(NAME const *buf) {                                    \
         RK_ASSERT(buf->len < INDEX_MAX, #NAME " overflow");                 \
         return (INDEX)buf->len;                                             \
     }                                                                       \
@@ -368,13 +368,13 @@ RK_LIST(
     rk_sb, char, rk_usz, RK_USZ_MAX,
 )
 
-static inline bool
-rk_ch_is_space(rk_u8 c) {
+static inline
+bool rk_ch_is_space(rk_u8 c) {
     return c == ' ' || c == '\t'|| c == '\r' || c == '\n';
 }
 
-static inline void
-rk_sb_strip_right(RkStrBuf *buf) {
+static inline
+void rk_sb_strip_right(RkStrBuf *buf) {
     for (;;) {
         if (buf->len == 0) break;
         rk_u8 c = buf->ptr[buf->len - 1];
@@ -383,24 +383,24 @@ rk_sb_strip_right(RkStrBuf *buf) {
     }
 }
 
-static void
-rk_sb_vprintf(RkStrBuf *buf, char const *fmt, va_list args) {
+static
+void rk_sb_vprintf(RkStrBuf *buf, char const *fmt, va_list args) {
     int len = vsnprintf(NULL, 0, fmt, args);
     rk_sb_reserve(buf, len + 1);
     vsnprintf(&buf->ptr[buf->len], len + 1, fmt, args);
     buf->len += len;
 }
 
-static void
-rk_sb_printf(RkStrBuf *buf, char const *fmt, ...) {
+static
+void rk_sb_printf(RkStrBuf *buf, char const *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     rk_sb_vprintf(buf, fmt, args);
     va_end(args);
 }
 
-static void
-rk_sb_vprintf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, va_list args) {
+static
+void rk_sb_vprintf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, va_list args) {
     if (n == 0) return;
 
     int fmt_len = vsnprintf(NULL, 0, fmt, args);
@@ -419,16 +419,16 @@ rk_sb_vprintf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, va_list args) {
     buf->len += fmt_len * n;
 }
 
-static void
-rk_sb_printf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, ...) {
+static
+void rk_sb_printf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     rk_sb_vprintf_repeat(buf, n, fmt, args);
     va_end(args);
 }
 
-static inline void
-rk_sb_flush(RkStrBuf *buf, FILE *stream) {
+static inline
+void rk_sb_flush(RkStrBuf *buf, FILE *stream) {
     if (buf->len == 0) return;
     fprintf(stream, "%.*s", (rk_u32)buf->len, buf->ptr);
     buf->len = 0;
@@ -461,8 +461,8 @@ typedef struct {
     rk_usz len;
 } RkBytes;
 
-static inline RkStrBuf
-rk_sb_from_bytes(RkBytes bytes) {
+static inline
+RkStrBuf rk_sb_from_bytes(RkBytes bytes) {
     return (RkStrBuf){
         .ptr = (void*)bytes.ptr,
         .len = bytes.len,
@@ -475,8 +475,8 @@ typedef struct {
     RkBytes bytes;
 } RkFile;
 
-static char *
-rk_file_result_as_cstr(RkFileResult kind) {
+static
+char *rk_file_result_as_cstr(RkFileResult kind) {
     switch (kind) {
         case RK_FILE_OK:             return "ok";
         case RK_FILE_PERMISSION_DENIED: return "permission denied";
@@ -486,8 +486,8 @@ rk_file_result_as_cstr(RkFileResult kind) {
     }
 }
 
-static RkFileResult
-file_result_from_errno(errno_t err) {
+static
+RkFileResult file_result_from_errno(errno_t err) {
     switch(err) {
         case 0:      return RK_FILE_OK;
         case EPERM:  return RK_FILE_PERMISSION_DENIED;
@@ -497,16 +497,16 @@ file_result_from_errno(errno_t err) {
     }
 }
 
-static inline FILE *
-open_file_or_failed(char const *path) {
+static inline
+FILE *open_file_or_failed(char const *path) {
     FILE *file;
     errno_t err = fopen_s(&file, path, "wb");
     RK_ASSERT(err == 0 && file != NULL, "failed open file");
     return file;
 }
 
-static inline void
-rk_file_save(
+static inline
+void rk_file_save(
     char const * const path,
     rk_u8 const * const buf,
     rk_usz const len
@@ -522,8 +522,8 @@ rk_file_save(
     fclose(file);
 }
 
-static RkFile
-rk_file_load(char const *path) {
+static
+RkFile rk_file_load(char const *path) {
     FILE *file = NULL;
     errno_t err = fopen_s(&file, path, "rb");
 
@@ -547,8 +547,8 @@ rk_file_load(char const *path) {
     return (RkFile){.result = RK_FILE_OK, .bytes = bytes};
 }
 
-static void
-rk_print_error(
+static
+void rk_print_error(
     char const *path,
     rk_u32 const line,
     rk_u32 const column,
@@ -566,8 +566,8 @@ rk_print_error(
     printf("\n" RK_CLEAN);
 }
 
-static inline RkBytes
-rk_file_load_or_exit(char const *path) {
+static inline
+RkBytes rk_file_load_or_exit(char const *path) {
     RkFile load = rk_file_load(path);
     if (load.result == RK_FILE_OK) return load.bytes;
     rk_print_error(path, 0, 0, "%s", rk_file_result_as_cstr(load.result));
@@ -575,15 +575,15 @@ rk_file_load_or_exit(char const *path) {
     exit(1);
 }
 
-static inline RkPathBuf
-rk_pb_from_cstr(char const *ptr) {
+static inline
+RkPathBuf rk_pb_from_cstr(char const *ptr) {
     RkPathBuf path = RK_PB_EMPTY;
     RK_LIST_EXTEND(path.ptr, ptr, path.len, path.cap, strlen(ptr) + 1);
     return path;
 }
 
-static void
-rk_pb_join(RkPathBuf *path, RkStrRef add) {
+static
+void rk_pb_join(RkPathBuf *path, RkStrRef add) {
     if (add.len == 0) return;
 
     for (rk_usz i = 0; i <= add.len; i += 1) {
@@ -602,8 +602,8 @@ rk_pb_join(RkPathBuf *path, RkStrRef add) {
     RK_LIST_PUSH(path->ptr, path->len, path->cap, '\0');
 }
 
-static inline char const *
-rk_pb_tail(RkPathBuf const *path, rk_usz n) {
+static inline
+char const *rk_pb_tail(RkPathBuf const *path, rk_usz n) {
     RK_ASSERT(path->len > 0, "expected non-empty path");
     RK_ASSERT(n > 0, "expected at least 1 component");
 
