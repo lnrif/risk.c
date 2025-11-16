@@ -1,6 +1,7 @@
 #ifndef RISK_H
 #define RISK_H
 
+#include <vadefs.h>
 #ifndef _WIN64
     #error "supported only win64"
 #endif
@@ -59,6 +60,14 @@ typedef double             rk_f64;
 #define RK_BOLD               "\e[1m"
 #define RK_ITALIC             "\e[3m"
 #define RK_UNDERLINE          "\e[4m"
+
+#define RK_RED                "\e[0;31m"
+#define RK_GREEN              "\e[0;32m"
+#define RK_YELLOW             "\e[0;33m"
+#define RK_ORANGE             "\e[0;34m"
+#define RK_MAGENTA            "\e[0;35m"
+#define RK_CYAN               "\e[0;36m"
+#define RK_WHITE              "\e[0;37m"
 
 #define RK_RED_BOLD           "\e[1;31m"
 #define RK_GREEN_BOLD         "\e[1;32m"
@@ -129,10 +138,16 @@ void RK_caller_println(RK_Caller caller) {
 #define RK_FAILED_ASSERT(expr, expr_len, fmt, args...) rk_failed_assert(RK_CALLER_HERE, expr, expr_len, fmt, args)
 
 static inline
-rk_u32 RK_decimal_len(rk_usz x) {
+rk_u32 rk_decimal_len(rk_usz x) {
     rk_u32 n = 1;
     while (x >= 10) { x /= 10; n += 1; }
     return n;
+}
+
+static inline
+void rk_internal_error_note_fixed(rk_u32 offset) {
+    if (offset > 3) printf("%*s", offset - 3, "");
+    printf(RK_CYAN_BOLD  "todo: convenient error format\n");
 }
 
 static noreturn
@@ -150,8 +165,11 @@ void rk_failed(
 
     printf("\n");
     RK_caller_println(caller);
+    rk_internal_error_note_fixed(0);
+    printf(RK_CLEAN);
     exit(1);
 }
+
 
 static noreturn
 void rk_failed_assert(
@@ -160,7 +178,7 @@ void rk_failed_assert(
     rk_usz len,
     char const *fmt, ...
 ) {
-    rk_u32 num_len = RK_decimal_len(caller.line);
+    rk_u32 num_len = rk_decimal_len(caller.line);
 
     printf(RK_RED_BOLD "assert" RK_WHITE_BOLD ": ");
 
@@ -175,9 +193,11 @@ void rk_failed_assert(
 
     printf(RK_CYAN_BOLD "%*s |\n", num_len, "");
     printf("%u | " RK_MAGENTA_BOLD "RK_ASSERT(%s, ...)\n", caller.line, expr);
-    printf(RK_CYAN_BOLD "%*s |             " RK_RED_BOLD, num_len, "");
+    printf(RK_CYAN_BOLD "%*s |           " RK_RED_BOLD, num_len, "");
     for (rk_usz i = 0; i < len; i += 1) putchar('^');
-    printf(" must be true\n\n" RK_CLEAN);
+    printf(" must be true\n");
+    rk_internal_error_note_fixed(num_len);
+    printf(RK_CLEAN);
     exit(1);
 }
 
@@ -287,8 +307,8 @@ void rk_failed_assert(
     }                                                                       \
                                                                             \
     static inline                                                           \
-    void PREFIX##_dealloc(NAME buf) {                                       \
-        RK_LIST_DEALLOC(buf.ptr);                                           \
+    void PREFIX##_dealloc(NAME * buf) {                                     \
+        RK_LIST_DEALLOC(buf->ptr);                                          \
     }                                                                       \
                                                                             \
     static                                                                  \
@@ -368,6 +388,8 @@ RK_LIST(
     rk_sb, char, rk_usz, RK_USZ_MAX,
 )
 
+#define RK_SB_EMPTY (RkStrBuf){.ptr = NULL, .len = 0, .cap = 0}
+
 static inline
 bool rk_ch_is_space(rk_u8 c) {
     return c == ' ' || c == '\t'|| c == '\r' || c == '\n';
@@ -381,6 +403,12 @@ void rk_sb_strip_right(RkStrBuf *buf) {
         if (!rk_ch_is_space(c)) break;
         buf->len -= 1;
     }
+}
+
+static
+void rk_sb_write_cstr(RkStrBuf *buf, char const * const cstr) {
+    RkStrRef slice = {.ptr = cstr, .len = strlen(cstr)};
+    rk_sb_extend(buf, slice);
 }
 
 static
@@ -427,18 +455,8 @@ void rk_sb_printf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, ...) {
     va_end(args);
 }
 
-static inline
-void rk_sb_flush(RkStrBuf *buf, FILE *stream) {
-    if (buf->len == 0) return;
-    fprintf(stream, "%.*s", (rk_u32)buf->len, buf->ptr);
-    buf->len = 0;
-}
-
 ////////////////////////////////////////
-// File & Path
-
-#include <direct.h>
-#include <string.h>
+// File Path
 
 typedef struct {
     char  *ptr;
@@ -447,133 +465,6 @@ typedef struct {
 } RkPathBuf;
 
 #define RK_PB_EMPTY (RkPathBuf){.ptr = NULL, .len = 0, .cap = 0}
-
-typedef enum {
-    RK_FILE_OK,
-    RK_FILE_PERMISSION_DENIED,
-    RK_FILE_EXPECTED_FILE,
-    RK_FILE_NOT_FOUND,
-    RK_FILE_UNKNOWN_ERROR,
-} RkFileResult;
-
-typedef struct {
-    rk_u8 *ptr;
-    rk_usz len;
-} RkBytes;
-
-static inline
-RkStrBuf rk_sb_from_bytes(RkBytes bytes) {
-    return (RkStrBuf){
-        .ptr = (void*)bytes.ptr,
-        .len = bytes.len,
-        .cap = bytes.len,
-    };
-}
-
-typedef struct {
-    RkFileResult result;
-    RkBytes bytes;
-} RkFile;
-
-static
-char *rk_file_result_as_cstr(RkFileResult kind) {
-    switch (kind) {
-        case RK_FILE_OK:             return "ok";
-        case RK_FILE_PERMISSION_DENIED: return "permission denied";
-        case RK_FILE_EXPECTED_FILE:     return "expected file, but found directory";
-        case RK_FILE_NOT_FOUND:         return "file not found";
-        case RK_FILE_UNKNOWN_ERROR:     return "failed read file (unknown reason)";
-    }
-}
-
-static
-RkFileResult file_result_from_errno(errno_t err) {
-    switch(err) {
-        case 0:      return RK_FILE_OK;
-        case EPERM:  return RK_FILE_PERMISSION_DENIED;
-        case ENOENT: return RK_FILE_NOT_FOUND;
-        case EACCES: return RK_FILE_EXPECTED_FILE;
-        default:     return RK_FILE_UNKNOWN_ERROR;
-    }
-}
-
-static inline
-FILE *open_file_or_failed(char const *path) {
-    FILE *file;
-    errno_t err = fopen_s(&file, path, "wb");
-    RK_ASSERT(err == 0 && file != NULL, "failed open file");
-    return file;
-}
-
-static inline
-void rk_file_save(
-    char const * const path,
-    rk_u8 const * const buf,
-    rk_usz const len
-) {
-    FILE *file;
-
-    errno_t err = fopen_s(&file, (char *)path, "wb");
-    RK_ASSERT(err == 0 && file != NULL, "failed open file");
-    
-    size_t bytes_written = fwrite(buf, 1, len, file);
-    RK_ASSERT(bytes_written == len, "failed write in file");
-    
-    fclose(file);
-}
-
-static
-RkFile rk_file_load(char const *path) {
-    FILE *file = NULL;
-    errno_t err = fopen_s(&file, path, "rb");
-
-    RkFileResult kind = file_result_from_errno(err);
-    if (kind != RK_FILE_OK) return (RkFile){.result = kind, .bytes = {0}};
-
-    fseek(file, 0, SEEK_END);
-    rk_usz file_len = ftell(file);
-    RK_ASSERT(file_len != RK_U32_MAX, "failed getting file len");
-    fseek(file, 0, SEEK_SET);
-
-    rk_u8 *buf = RK_ALLOC_ARRAY(file_len, rk_u8);
-    RK_ASSERT(buf != NULL, "failed allocating buf");
-
-    rk_usz read = fread(buf, 1, file_len, file);
-    RK_ASSERT(read == file_len, "incomplete reading file");
-
-    RK_ASSERT(fclose(file) == 0, "failed close file");
-
-    RkBytes bytes = {.ptr = buf, .len = file_len};
-    return (RkFile){.result = RK_FILE_OK, .bytes = bytes};
-}
-
-static
-void rk_print_error(
-    char const *path,
-    rk_u32 const line,
-    rk_u32 const column,
-    char const *fmt, ...
-) {
-    printf(RK_RED_BOLD "error" RK_WHITE_BOLD ": ");
-
-    va_list args;
-    va_start(args, fmt);
-    vprintf(fmt, args);
-    va_end(args);
-    
-    printf("\n" RK_CYAN_BOLD " --> %s", path);
-    if (line != 0 && column != 0) printf(":%hu:%hu", line, column);
-    printf("\n" RK_CLEAN);
-}
-
-static inline
-RkBytes rk_file_load_or_exit(char const *path) {
-    RkFile load = rk_file_load(path);
-    if (load.result == RK_FILE_OK) return load.bytes;
-    rk_print_error(path, 0, 0, "%s", rk_file_result_as_cstr(load.result));
-    printf("\n");
-    exit(1);
-}
 
 static inline
 RkPathBuf rk_pb_from_cstr(char const *ptr) {
@@ -592,8 +483,10 @@ void rk_pb_join(RkPathBuf *path, RkStrRef add) {
 
     rk_usz reserve_len = add.len + 1;
     if (path->len > 0) {
-        path->len -= 1;   // strip NULL
-        reserve_len += 1; // add slash
+        // strip NULL
+        path->len -= 1;
+        // add slash
+        reserve_len += 1;
     }
     RK_LIST_RESERVE(path->ptr, path->len, path->cap, reserve_len);
 
@@ -619,35 +512,502 @@ char const *rk_pb_tail(RkPathBuf const *path, rk_usz n) {
 }
 
 static inline
-void rk_pb_dealloc(RkPathBuf path) {
-    RK_LIST_DEALLOC(path.ptr);
+void rk_pb_dealloc(RkPathBuf * path) {
+    RK_LIST_DEALLOC(path->ptr);
+}
+
+////////////////////////////////////////
+// File
+
+#include <direct.h>
+#include <string.h>
+
+typedef enum {
+    RK_FILE_LOAD_OK,
+    RK_FILE_LOAD_PERMISSION_DENIED,
+    RK_FILE_LOAD_EXPECTED_FILE,
+    RK_FILE_LOAD_NOT_FOUND,
+    RK_FILE_LOAD_UNKNOWN_ERROR,
+} RkFileLoadKind;
+
+typedef struct {
+    rk_u8 *ptr;
+    rk_usz len;
+} RkBytes;
+
+static inline
+RkStrBuf rk_sb_from_bytes(RkBytes bytes) {
+    return (RkStrBuf){
+        .ptr = (void*)bytes.ptr,
+        .len = bytes.len,
+        .cap = bytes.len,
+    };
+}
+
+typedef struct {
+    RkFileLoadKind kind;
+    RkBytes bytes;
+} RkFileLoadResult;
+
+static
+char *rk_file_result_as_cstr(RkFileLoadKind kind) {
+    switch (kind) {
+        case RK_FILE_LOAD_OK:                return "ok";
+        case RK_FILE_LOAD_PERMISSION_DENIED: return "permission denied";
+        case RK_FILE_LOAD_EXPECTED_FILE:     return "expected file, but found directory";
+        case RK_FILE_LOAD_NOT_FOUND:         return "file not found";
+        case RK_FILE_LOAD_UNKNOWN_ERROR:     return "failed read file (unknown reason)";
+    }
+}
+
+static
+RkFileLoadKind file_result_from_errno(errno_t err) {
+    switch (err) {
+        case 0:      return RK_FILE_LOAD_OK;
+        case EPERM:  return RK_FILE_LOAD_PERMISSION_DENIED;
+        case ENOENT: return RK_FILE_LOAD_NOT_FOUND;
+        case EACCES: return RK_FILE_LOAD_EXPECTED_FILE;
+        default:     return RK_FILE_LOAD_UNKNOWN_ERROR;
+    }
 }
 
 static inline
-void rk_console_init() {
-    if(!setlocale(LC_ALL, "en_US.UTF-8")) setlocale(LC_ALL, "");
+FILE *rk_open_file_or_fail(char const *path) {
+    FILE *file;
+    errno_t err = fopen_s(&file, path, "wb");
+    RK_ASSERT(err == 0 && file != NULL, "failed open file");
+    return file;
+}
+
+static inline
+void rk_file_save(
+    char const * const path,
+    rk_u8 const * const buf,
+    rk_usz const len
+) {
+    FILE *file;
+
+    errno_t err = fopen_s(&file, (char *)path, "wb");
+    RK_ASSERT(err == 0 && file != NULL, "failed open file");
     
+    size_t written = fwrite(buf, 1, len, file);
+    RK_ASSERT(written == len, "failed write in file");
+    
+    RK_ASSERT(fclose(file) == 0, "failed close file");
+}
+
+static
+RkFileLoadResult rk_file_try_load(char const *path) {
+    FILE *file = NULL;
+    errno_t err = fopen_s(&file, path, "rb");
+
+    RkFileLoadKind kind = file_result_from_errno(err);
+    if (kind != RK_FILE_LOAD_OK) return (RkFileLoadResult){.kind = kind, .bytes = {0}};
+
+    fseek(file, 0, SEEK_END);
+    rk_usz file_len = ftell(file);
+    RK_ASSERT(file_len != RK_U32_MAX, "failed getting file len");
+    fseek(file, 0, SEEK_SET);
+
+    rk_u8 *buf = RK_ALLOC_ARRAY(file_len, rk_u8);
+    RK_ASSERT(buf != NULL, "failed allocating buf");
+
+    rk_usz read = fread(buf, 1, file_len, file);
+    RK_ASSERT(read == file_len, "incomplete reading file");
+
+    RK_ASSERT(fclose(file) == 0, "failed close file");
+
+    RkBytes bytes = {.ptr = buf, .len = file_len};
+    return (RkFileLoadResult){.kind = RK_FILE_LOAD_OK, .bytes = bytes};
+}
+
+static inline
+RkBytes rk_file_load_or_exit(char const *path) {
+    RkFileLoadResult load = rk_file_try_load(path);
+    RK_ASSERT(load.kind == RK_FILE_LOAD_OK, "failed load `%s`", path);
+    return load.bytes;
+}
+
+////////////////////////////////////////
+// Location in file
+
+typedef rk_u32 RkPos;
+#define RK_POS_MAX RK_U32_MAX
+
+typedef struct {
+    RkPos start;
+    RkPos len;
+} RkSpan;
+
+typedef struct {
+    RkPos line;
+    RkPos column;
+} RkLoc;
+
+#define RK_LOC_ZERO ((RkLoc){.line = 0, .column = 0})
+
+typedef struct {
+    RkSpan span;
+    RkLoc loc;
+} RkLine;
+
+static inline
+rk_usz rk_utf8_len(rk_u8 b) {
+    if      ((b & 0xFF) < 0x80)  return 1;
+    else if ((b & 0xE0) == 0xC0) return 2;
+    else if ((b & 0xF0) == 0xE0) return 3;
+    else if ((b & 0xF8) == 0xF0) return 4;
+    // invalid codepoint: just skip
+    else                         return 1;
+}
+
+static
+RkLine rk_line(
+    char const *ptr,
+    rk_usz len,
+    rk_usz pos,
+    rk_u32 tab
+) {
+    rk_usz start = 0;
+    rk_usz line = 1;
+    rk_usz column = 1;
+    for (rk_usz i = 0; i < pos; i += rk_utf8_len(ptr[i])) {
+        rk_u8 b = ptr[i];
+
+        if (b == '\n') {
+            start = i + 1;
+            line += 1;
+            column = 0;
+        }
+
+        if (b == '\t') column += tab;
+        else           column += 1;
+    }
+
+    rk_usz end = start;
+    while (end < len && ptr[end] != '\n') end += 1;
+
+    RkSpan span = {.start = start, .len = end - start};
+    RkLoc loc = {.line = line, .column = column};
+    return (RkLine){.span = span, .loc = loc};
+}
+
+////////////////////////////////////////
+// Diagnostic
+
+typedef struct {
+    RkStrBuf buf;
+} RkDiag;
+
+#define RK_DIAG_EMPTY ((RkDiag){.buf = RK_SB_EMPTY})
+
+static inline
+RkDiag rk_diag_alloc(rk_usz cap) {
+    return (RkDiag){.buf = rk_sb_alloc(cap)};
+}
+
+static inline void
+rk_diag_vprint(RkDiag *diag, char const *fmt, va_list args) {
+    rk_sb_vprintf(&diag->buf, fmt, args);
+}
+
+static inline void
+rk_diag_write_cstr(RkDiag *diag, char const * const cstr) {
+    rk_sb_write_cstr(&diag->buf, cstr);
+}
+
+static inline void
+rk_diag_print(RkDiag *diag, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    rk_diag_vprint(diag, fmt, args);
+    va_end(args);
+}
+
+static inline
+void rk_diag_flush(RkDiag *diag, FILE *stream) {
+    if (diag->buf.len == 0) return;
+    size_t written = fwrite(diag->buf.ptr, 1, diag->buf.len, stream);
+    RK_ASSERT(written == diag->buf.len, "failed writing to file");
+    diag->buf.len = 0;
+}
+
+static inline
+void rk_diag_dealloc(RkDiag * diag) {
+    rk_sb_dealloc(&diag->buf);
+}
+
+////////////////////////////////////////
+// Unit
+
+typedef struct {
+    RkPathBuf path;
+    RkStrBuf src;
+} RkUnit;
+
+static inline
+void rk_unit_dealloc(RkUnit * unit) {
+    RK_ASSERT(unit->src.ptr != NULL && unit->path.ptr != NULL, "");
+    RK_DEALLOC(unit->src.ptr);
+    rk_pb_dealloc(&unit->path);
+}
+
+typedef enum {
+    RK_UNIT_LOAD_OK,
+    RK_UNIT_LOAD_TOO_BIG,
+    RK_UNIT_LOAD_PERMISSION_DENIED,
+    RK_UNIT_LOAD_EXPECTED_FILE,
+    RK_UNIT_LOAD_NOT_FOUND,
+    RK_UNIT_LOAD_UNKNOWN_ERROR,
+} RkUnitLoadKind;
+
+typedef struct {
+    RkUnit unit;
+    RkUnitLoadKind kind;
+} RkUnitLoadResult;
+
+static
+RkUnitLoadKind rk_unit_load_kind_from_errno(errno_t err) {
+    switch (err) {
+        case 0:      return RK_UNIT_LOAD_OK;
+        case EPERM:  return RK_UNIT_LOAD_PERMISSION_DENIED;
+        case ENOENT: return RK_UNIT_LOAD_NOT_FOUND;
+        case EACCES: return RK_UNIT_LOAD_EXPECTED_FILE;
+        default:     return RK_UNIT_LOAD_UNKNOWN_ERROR;
+    }
+}
+
+static
+RkUnitLoadResult rk_unit_try_load(char const *path) {
+    FILE *file = NULL;
+    errno_t err = fopen_s(&file, path, "rb");
+
+    RkUnitLoadKind kind = rk_unit_load_kind_from_errno(err);
+    if (kind != RK_UNIT_LOAD_OK) {
+        return (RkUnitLoadResult){.unit = {0}, .kind = kind};
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_len = ftell(file);
+    RK_ASSERT(file_len != -1, "failed getting file len");
+    rk_usz len = file_len;
+    fseek(file, 0, SEEK_SET);
+
+    if (len > RK_POS_MAX) {
+        RK_ASSERT(fclose(file) == 0, "failed close file");
+        return (RkUnitLoadResult){.unit = {0}, .kind = RK_UNIT_LOAD_TOO_BIG};
+    }
+
+    rk_u8 *buf = RK_ALLOC_ARRAY(len, rk_u8);
+    RK_ASSERT(buf != NULL, "failed allocating buf");
+
+    rk_usz read = fread(buf, 1, len, file);
+    RK_ASSERT(read == len, "incomplete reading file");
+
+    RK_ASSERT(fclose(file) == 0, "failed close file");
+
+    RkBytes bytes = {.ptr = buf, .len = len};
+    return (RkUnitLoadResult){
+        .unit = (RkUnit){
+            .src = rk_sb_from_bytes(bytes),
+            .path = rk_pb_from_cstr(path),
+        },
+        .kind = RK_UNIT_LOAD_OK,
+    };
+}
+
+////////////////////////////////////////
+// Diagnostic extention
+
+static inline
+void rk_diag_command(
+    RkDiag * const diag,
+    char const * const name,
+    char const * const * args,
+    rk_usz args_len
+) {
+    rk_diag_print(diag, RK_CYAN_BOLD "%s" RK_MAGENTA_BOLD, name);
+    for (rk_usz i = 0; i < args_len; i += 1) rk_diag_print(diag, " %s", args[i]);
+    rk_diag_print(diag, "\n");
+}
+
+static char const * const RK_DIAG_BUILD_ARGS[] = {"<INPUT>"};
+
+static inline
+void rk_diag_build(RkDiag * const diag) {
+    rk_diag_command(diag, "build | b", RK_DIAG_BUILD_ARGS, sizeof(RK_DIAG_BUILD_ARGS) / sizeof(RK_DIAG_BUILD_ARGS[0]));
+    rk_diag_write_cstr(diag, RK_CLEAN);
+}
+
+static inline
+void rk_diag_build_help(RkDiag * const diag) {
+    rk_diag_print(diag, RK_GREEN_BOLD "usage\n");
+    rk_diag_write_cstr(diag, "    "); rk_diag_build(diag);
+    rk_diag_write_cstr(diag, RK_CLEAN);
+}
+
+static inline
+void rk_diag_usage(RkDiag * const diag, char const * const compiler) {
+    rk_diag_print(diag, RK_GREEN_BOLD "usage\n");
+    rk_diag_write_cstr(diag, "    "); rk_diag_print(diag, RK_CYAN_BOLD "%s " RK_MAGENTA_BOLD "[COMMAND]\n", compiler);
+
+    rk_diag_write_cstr(diag, "\n");
+    rk_diag_print(diag, RK_GREEN_BOLD "commands\n", compiler);
+    rk_diag_write_cstr(diag, "    "); rk_diag_build(diag);
+
+    rk_diag_write_cstr(diag, RK_CLEAN);
+}
+
+static inline
+void rk_diag_unknown_command(RkDiag * const diag, char const * const compiler, char const * const command) {
+    rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown command " RK_MAGENTA_BOLD "`%s`" "\n" RK_CLEAN, command);
+}
+
+static inline
+void rk_diag_error(
+    RkDiag * const diag,
+    char const * const path,
+    RkLoc const loc,
+    rk_u32 offset,
+    char const * const fmt,
+    ...
+) {
+    rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": ");
+    va_list args;
+    va_start(args, fmt);
+    rk_diag_vprint(diag, fmt, args);
+    va_end(args);
+    rk_diag_print(diag, "\n");
+
+    rk_diag_print(diag, RK_CYAN_BOLD " %*s--> %s", offset, "", path);
+    if (loc.line != 0 && loc.column != 0) {
+        rk_diag_print(diag, ":%hu:%hu", loc.line, loc.column);
+    }
+
+    rk_diag_print(diag, "\n" RK_CLEAN);
+}
+
+static
+void rk_diag_can_not_load_unit(
+    RkDiag * const diag,
+    char const * const path,
+    RkUnitLoadKind const error
+) {
+    char const *fmt = NULL;
+    switch (error) {
+        case RK_UNIT_LOAD_OK:                   RK_UNREACHABLE("");
+        case RK_UNIT_LOAD_TOO_BIG:              fmt = "file too big";                       break;
+        case RK_UNIT_LOAD_PERMISSION_DENIED:    fmt = "permission denied";                  break;
+        case RK_UNIT_LOAD_EXPECTED_FILE:        fmt = "expected file, but found folder";    break;
+        case RK_UNIT_LOAD_NOT_FOUND:            fmt = "file not found";                     break;
+        case RK_UNIT_LOAD_UNKNOWN_ERROR:        fmt = "can not load file (unknown error)";  break;
+    }
+    rk_diag_error(diag, path, RK_LOC_ZERO, 0, fmt);
+}
+
+////////////////////////////////////////
+// Compiler
+
+typedef struct {
+    char const * const exe;
+    RkDiag diag;
+} RkCompiler;
+
+static inline noreturn
+void rk_compiler_flush_and_exit(RkCompiler * const compiler, rk_i32 const code) {
+    // TODO: hardcore output
+    rk_diag_flush(&compiler->diag, stderr);
+    rk_diag_dealloc(&compiler->diag);
+    exit(code);
+}
+
+static inline
+RkUnit rk_compiler_unit_load_or_exit(RkCompiler * const compiler, char const * const path) {
+    RkUnitLoadResult result = rk_unit_try_load(path);
+    if (result.kind == RK_UNIT_LOAD_OK) return result.unit;
+    rk_diag_can_not_load_unit(&compiler->diag, path, result.kind);
+    rk_compiler_flush_and_exit(compiler, -1);
+}
+
+static
+void rk_analyze_command_build(
+    RkCompiler * const compiler,
+    rk_i32 const argc,
+    char const * const * const argv
+) {
+    if (argc == 0) {
+        rk_diag_print(&compiler->diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": expected " RK_MAGENTA_BOLD "<INPUT>" "\n" RK_CLEAN);
+        rk_compiler_flush_and_exit(compiler, -1);
+    }
+
+    if (argc != 1) {
+        rk_diag_print(&compiler->diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": too many args\n" RK_CLEAN);
+        rk_compiler_flush_and_exit(compiler, -1);
+    }
+
+    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-h") == 0) {
+        rk_diag_build_help(&compiler->diag);
+        rk_compiler_flush_and_exit(compiler, 0);
+    }
+
+    RkUnit unit = rk_compiler_unit_load_or_exit(compiler, argv[0]);
+
+    rk_sb_strip_right(&unit.src);
+    rk_diag_print(
+        &compiler->diag,
+        RK_CYAN_BOLD "%s\n" RK_MAGENTA_BOLD "%.*s" RK_CLEAN,
+        unit.path.ptr, (rk_u32)unit.src.len, unit.src.ptr
+    );
+
+    rk_unit_dealloc(&unit);
+    rk_compiler_flush_and_exit(compiler, 0);
+}
+
+static
+void rk_analyze_args(
+    rk_i32 const argc,
+    char const * const * const argv
+) {
+    RkCompiler compiler = {.exe = argv[0], .diag = RK_DIAG_EMPTY};
+
+    if (argc < 2) {
+        rk_diag_usage(&compiler.diag, compiler.exe);
+        rk_compiler_flush_and_exit(&compiler, 0);
+    }
+
+    char const * const command = argv[1];
+    if (strcmp(command, "build") == 0 || strcmp(command, "b") == 0) {
+        rk_analyze_command_build(&compiler, argc - 2, &argv[2]);
+    } else {
+        rk_diag_unknown_command(&compiler.diag, compiler.exe, command);
+        rk_compiler_flush_and_exit(&compiler, -1);
+    }
+}
+
+////////////////////////////////////////
+// Main
+
+// BUILD: clang -Wall -Wextra -Wno-unused-function risk.c -o risk.exe
+
+static inline
+void rk_console_init() {
+    if(!setlocale(LC_ALL, "en_US.UTF-8")) {
+        setlocale(LC_ALL, "");
+    }
+
     #ifdef _WIN32
         SetConsoleOutputCP(CP_UTF8);
         SetConsoleCP(CP_UTF8);
     #endif
 }
 
-// BUILD: clang -Wall -Wextra -Wno-unused-function risk.c -o risk.exe
-
-rk_i32
-main(void) {
+rk_i32 main(
+    rk_i32 const argc,
+    char const * const * const argv
+) {
     rk_console_init();
-    
-    RkStrBuf buf = rk_sb_alloc(RK_PAGE_SIZE);
-    rk_sb_printf(&buf, RK_RED_BOLD "RISK" RK_WHITE_BOLD " is " RK_GREEN_BOLD_ITALIC "self-known" RK_CLEAN "\n");
-    // RkPathBuf path = rk_pb_from_cstr("examples/main.rk");
-    RkBytes bytes = rk_file_load_or_exit("examples/main.rk");
-    RkStrBuf src = rk_sb_from_bytes(bytes);
-    rk_sb_strip_right(&src);
-    rk_sb_printf(&buf, RK_MAGENTA_BOLD "```\n%.*s\n```" RK_CLEAN, (rk_u32)src.len, src.ptr);
-    rk_sb_flush(&buf, stdout);
-    rk_sb_dealloc(buf);
+    rk_analyze_args(argc, argv);
+    return 0;
 }
 
 #endif // RISK_H
