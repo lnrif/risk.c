@@ -1,7 +1,6 @@
 #ifndef RISK_H
 #define RISK_H
 
-#include <vadefs.h>
 #ifndef _WIN64
     #error "supported only win64"
 #endif
@@ -56,34 +55,46 @@ typedef double             rk_f64;
 ////////////////////////////////////////
 // Colors
 
-#define RK_CLEAN              "\e[0m"
-#define RK_BOLD               "\e[1m"
-#define RK_ITALIC             "\e[3m"
-#define RK_UNDERLINE          "\e[4m"
+#define RK_CLEAN               "\e[0m"
+#define RK_BOLD                "\e[1m"
+#define RK_ITALIC              "\e[3m"
+#define RK_UNDERLINE           "\e[4m"
 
-#define RK_RED                "\e[0;31m"
-#define RK_GREEN              "\e[0;32m"
-#define RK_YELLOW             "\e[0;33m"
-#define RK_ORANGE             "\e[0;34m"
-#define RK_MAGENTA            "\e[0;35m"
-#define RK_CYAN               "\e[0;36m"
-#define RK_WHITE              "\e[0;37m"
+#define RK_BLACK               "\e[0;90m"
+#define RK_RED                 "\e[0;31m"
+#define RK_GREEN               "\e[0;32m"
+#define RK_YELLOW              "\e[0;33m"
+#define RK_ORANGE              "\e[0;34m"
+#define RK_MAGENTA             "\e[0;35m"
+#define RK_CYAN                "\e[0;36m"
+#define RK_WHITE               "\e[0;37m"
 
-#define RK_RED_BOLD           "\e[1;31m"
-#define RK_GREEN_BOLD         "\e[1;32m"
-#define RK_YELLOW_BOLD        "\e[1;33m"
-#define RK_ORANGE_BOLD        "\e[1;34m"
-#define RK_MAGENTA_BOLD       "\e[1;35m"
-#define RK_CYAN_BOLD          "\e[1;36m"
-#define RK_WHITE_BOLD         "\e[1;37m"
+#define RK_BLACK_BOLD          "\e[0;1;90m"
+#define RK_RED_BOLD            "\e[0;1;31m"
+#define RK_GREEN_BOLD          "\e[0;1;32m"
+#define RK_YELLOW_BOLD         "\e[0;1;33m"
+#define RK_ORANGE_BOLD         "\e[0;1;34m"
+#define RK_MAGENTA_BOLD        "\e[0;1;35m"
+#define RK_CYAN_BOLD           "\e[0;1;36m"
+#define RK_WHITE_BOLD          "\e[0;1;37m"
 
-#define RK_RED_BOLD_ITALIC     "\e[1;3;31m"
-#define RK_GREEN_BOLD_ITALIC   "\e[1;3;32m"
-#define RK_YELLOW_BOLD_ITALIC  "\e[1;3;33m"
-#define RK_ORANGE_BOLD_ITALIC  "\e[1;3;34m"
-#define RK_MAGENTA_BOLD_ITALIC "\e[1;3;35m"
-#define RK_CYAN_BOLD_ITALIC    "\e[1;3;36m"
-#define RK_WHITE_BOLD_ITALIC   "\e[1;3;37m"
+#define RK_BLACK_ITALIC        "\e[0;3;90m"
+#define RK_RED_ITALIC          "\e[0;3;31m"
+#define RK_GREEN_ITALIC        "\e[0;3;32m"
+#define RK_YELLOW_ITALIC       "\e[0;3;33m"
+#define RK_ORANGE_ITALIC       "\e[0;3;34m"
+#define RK_MAGENTA_ITALIC      "\e[0;3;35m"
+#define RK_CYAN_ITALIC         "\e[0;3;36m"
+#define RK_WHITE_ITALIC        "\e[0;3;37m"
+
+#define RK_BLACK_BOLD_ITALIC   "\e[0;1;3;90m"
+#define RK_RED_BOLD_ITALIC     "\e[0;1;3;31m"
+#define RK_GREEN_BOLD_ITALIC   "\e[0;1;3;32m"
+#define RK_YELLOW_BOLD_ITALIC  "\e[0;1;3;33m"
+#define RK_ORANGE_BOLD_ITALIC  "\e[0;1;3;34m"
+#define RK_MAGENTA_BOLD_ITALIC "\e[0;1;3;35m"
+#define RK_CYAN_BOLD_ITALIC    "\e[0;1;3;36m"
+#define RK_WHITE_BOLD_ITALIC   "\e[0;1;3;37m"
 
 ////////////////////////////////////////
 // Caller
@@ -94,7 +105,7 @@ typedef struct {
 } RK_Caller;
 
 static
-void RK_caller_println(RK_Caller caller) {
+void rk_caller_println(RK_Caller caller) {
     printf(RK_CYAN_BOLD " --> %s:%i\n" RK_CLEAN, caller.file, caller.line);
 }
 
@@ -108,46 +119,43 @@ void RK_caller_println(RK_Caller caller) {
         if (expr) break;                                            \
         if (sizeof(fmt) <= 1) RK_FAILED("assert", #expr);           \
         else RK_FAILED_ASSERT(#expr, sizeof(#expr) - 1, fmt, args); \
-    } while (0)
+    } while (0)                                                     \
 
 #define RK_TODO(fmt, args...)                                                         \
     do {                                                                              \
         if (sizeof(fmt) <= 1) RK_FAILED("todo", "%s not implemented yet!", __func__); \
         else RK_FAILED("todo", fmt, args);                                            \
-    } while (0)
+    } while (0)                                                                       \
 
 #define RK_UNIMPLEMENTED(fmt, args...)                      \
     do {                                                    \
         if (sizeof(fmt) <= 1) RK_PANIC("not implemented!"); \
         else RK_FAILED("unimplemented", fmt, args);         \
-    } while (0)
+    } while (0)                                             \
 
 #define RK_PANIC(fmt, args...)                                             \
     do {                                                                   \
         if (sizeof(fmt) <= 1) RK_FAILED("panic", "something went wrong!"); \
         else RK_FAILED("panic", fmt, args);                                \
-    } while (0)
+    } while (0)                                                            \
 
 #define RK_UNREACHABLE(fmt, args...)                                \
     do {                                                            \
         if (sizeof(fmt) <= 1) RK_PANIC("reached the unreachable!"); \
         else RK_FAILED("unreachable", fmt, args);                   \
-    } while (0)
+    } while (0)                                                     \
 
-#define RK_FAILED(type, fmt, args...)                  rk_failed(RK_CALLER_HERE, type, fmt, args)
-#define RK_FAILED_ASSERT(expr, expr_len, fmt, args...) rk_failed_assert(RK_CALLER_HERE, expr, expr_len, fmt, args)
+#define RK_FAILED(type, fmt, args...)          \
+    rk_failed(RK_CALLER_HERE, type, fmt, args) \
+
+#define RK_FAILED_ASSERT(expr, expr_len, fmt, args...)          \
+    rk_failed_assert(RK_CALLER_HERE, expr, expr_len, fmt, args) \
 
 static inline
 rk_u32 rk_decimal_len(rk_usz x) {
     rk_u32 n = 1;
     while (x >= 10) { x /= 10; n += 1; }
     return n;
-}
-
-static inline
-void rk_internal_error_note_fixed(rk_u32 offset) {
-    if (offset > 3) printf("%*s", offset - 3, "");
-    printf(RK_CYAN_BOLD  "todo: convenient error format\n");
 }
 
 static noreturn
@@ -164,8 +172,7 @@ void rk_failed(
     va_end(args);
 
     printf("\n");
-    RK_caller_println(caller);
-    rk_internal_error_note_fixed(0);
+    rk_caller_println(caller);
     printf(RK_CLEAN);
     exit(1);
 }
@@ -189,14 +196,13 @@ void rk_failed_assert(
     printf("\n");
 
     printf("%*s", num_len - 1, "");
-    RK_caller_println(caller);
+    rk_caller_println(caller);
 
     printf(RK_CYAN_BOLD "%*s |\n", num_len, "");
     printf("%u | " RK_MAGENTA_BOLD "RK_ASSERT(%s, ...)\n", caller.line, expr);
     printf(RK_CYAN_BOLD "%*s |           " RK_RED_BOLD, num_len, "");
     for (rk_usz i = 0; i < len; i += 1) putchar('^');
     printf(" must be true\n");
-    rk_internal_error_note_fixed(num_len);
     printf(RK_CLEAN);
     exit(1);
 }
@@ -204,7 +210,6 @@ void rk_failed_assert(
 ////////////////////////////////////////
 // Allocations
 
-#include <malloc.h>
 #include <stdalign.h>
 
 #define RK_KB(n) ((n) * 1024ui64)
@@ -496,12 +501,13 @@ void rk_pb_join(RkPathBuf *path, RkStrRef add) {
 }
 
 static inline
-char const *rk_pb_tail(RkPathBuf const *path, rk_usz n) {
-    RK_ASSERT(path->len > 0, "expected non-empty path");
+char const *rk_pb_tail(char const * const path, rk_usz n) {
+    rk_usz len = strlen(path);
+    RK_ASSERT(len > 0, "expected non-empty path");
     RK_ASSERT(n > 0, "expected at least 1 component");
 
-    char const * const start = &path->ptr[0];
-    char const *peek = &path->ptr[path->len];
+    char const * const start = path;
+    char const * peek = &path[len + 1];
 
     for (;;) {
         peek -= 1;
@@ -819,48 +825,72 @@ RkUnitLoadResult rk_unit_try_load(char const *path) {
 ////////////////////////////////////////
 // Diagnostic extention
 
+typedef struct {
+    char const * const * names;
+    char const * const * args;
+    rk_usz names_len;
+    rk_usz args_len;
+} RkCommand;
+
+#define RK_COMMAND(NAMES, ARGS) (RkCommand){        \
+    .names = NAMES,                                 \
+    .names_len = sizeof(NAMES) / sizeof(NAMES[0]),  \
+    .args = ARGS,                                   \
+    .args_len = sizeof(ARGS) / sizeof(ARGS[0]),     \
+}                                                   \
+
 static inline
-void rk_diag_command(
-    RkDiag * const diag,
-    char const * const name,
-    char const * const * args,
-    rk_usz args_len
-) {
-    rk_diag_print(diag, RK_CYAN_BOLD "%s" RK_MAGENTA_BOLD, name);
-    for (rk_usz i = 0; i < args_len; i += 1) rk_diag_print(diag, " %s", args[i]);
+void rk_diag_command(RkDiag * const diag, RkCommand command) {
+    for (rk_usz i = 0; i < command.names_len - 1; i += 1) {
+        rk_diag_print(diag, RK_CYAN_BOLD "%s" RK_WHITE_BOLD ", ", command.names[i]);
+    }
+    rk_diag_print(diag, RK_CYAN_BOLD "%s", command.names[command.names_len - 1]);
+    
+    rk_diag_print(diag, RK_MAGENTA_BOLD);
+    for (rk_usz i = 0; i < command.args_len; i += 1) {
+        rk_diag_print(diag, " %s", command.args[i]);
+    }
     rk_diag_print(diag, "\n");
 }
 
+static char const * const RK_DIAG_BUILD_NAMES[] = {"build", "b"};
 static char const * const RK_DIAG_BUILD_ARGS[] = {"<INPUT>"};
 
-static inline
-void rk_diag_build(RkDiag * const diag) {
-    rk_diag_command(diag, "build | b", RK_DIAG_BUILD_ARGS, sizeof(RK_DIAG_BUILD_ARGS) / sizeof(RK_DIAG_BUILD_ARGS[0]));
-    rk_diag_write_cstr(diag, RK_CLEAN);
-}
+static char const * const RK_DIAG_LEX_NAMES[] = {"lex", "l"};
+static char const * const RK_DIAG_LEX_ARGS[] = {"<INPUT>"};
 
-static inline
-void rk_diag_build_help(RkDiag * const diag) {
-    rk_diag_print(diag, RK_GREEN_BOLD "usage\n");
-    rk_diag_write_cstr(diag, "    "); rk_diag_build(diag);
-    rk_diag_write_cstr(diag, RK_CLEAN);
-}
+static RkCommand RK_COMMAND_BUILD = RK_COMMAND(RK_DIAG_BUILD_NAMES, RK_DIAG_BUILD_ARGS);
+static RkCommand RK_COMMAND_LEX = RK_COMMAND(RK_DIAG_LEX_NAMES, RK_DIAG_LEX_ARGS);
 
 static inline
 void rk_diag_usage(RkDiag * const diag, char const * const compiler) {
-    rk_diag_print(diag, RK_GREEN_BOLD "usage\n");
-    rk_diag_write_cstr(diag, "    "); rk_diag_print(diag, RK_CYAN_BOLD "%s " RK_MAGENTA_BOLD "[COMMAND]\n", compiler);
-
-    rk_diag_write_cstr(diag, "\n");
-    rk_diag_print(diag, RK_GREEN_BOLD "commands\n", compiler);
-    rk_diag_write_cstr(diag, "    "); rk_diag_build(diag);
+    rk_diag_print(diag, RK_GREEN_BOLD "USAGE" RK_WHITE_BOLD ": " RK_RED_BOLD "%s " RK_CYAN_BOLD "[COMMAND]\n\n", rk_pb_tail(compiler, 1));
+    rk_diag_print(diag, RK_GREEN_BOLD "COMMANDS" RK_WHITE_BOLD ":\n", compiler);
+    rk_diag_write_cstr(diag, "    "); rk_diag_command(diag, RK_COMMAND_BUILD);
+    rk_diag_write_cstr(diag, "    "); rk_diag_command(diag, RK_COMMAND_LEX);
 
     rk_diag_write_cstr(diag, RK_CLEAN);
 }
 
 static inline
-void rk_diag_unknown_command(RkDiag * const diag, char const * const compiler, char const * const command) {
-    rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown command " RK_MAGENTA_BOLD "`%s`" "\n" RK_CLEAN, command);
+void rk_diag_unknown_command(RkDiag * const diag, char const * const command) {
+    rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown command `" RK_CYAN_BOLD "%s" RK_WHITE_BOLD "`\n" RK_CLEAN, command);
+}
+
+static inline
+void rk_diag_unknown_global_flag(RkDiag * const diag, char const * const flag) {
+    rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown global flag `" RK_ORANGE_BOLD "%s" RK_WHITE_BOLD "`\n", flag);
+    rk_diag_print(diag, RK_YELLOW_BOLD_ITALIC "[*]" RK_BLACK_BOLD_ITALIC " global flags " RK_UNDERLINE "don't exist\n");
+    rk_diag_print(
+        diag,
+        RK_GREEN_BOLD_ITALIC "[?]" " "
+        RK_BLACK_BOLD_ITALIC RK_UNDERLINE "instead"
+        RK_BLACK_BOLD_ITALIC " use flags "
+        RK_BLACK_BOLD_ITALIC RK_UNDERLINE "with commands"
+        "\n"
+    );
+    rk_diag_print(diag, RK_BLACK_BOLD_ITALIC "   " " like `" RK_CYAN_BOLD "build" RK_ORANGE_BOLD " --help" RK_BLACK_BOLD_ITALIC "`\n");
+    rk_diag_print(diag, RK_CLEAN);
 }
 
 static inline
@@ -913,75 +943,191 @@ typedef struct {
     RkDiag diag;
 } RkCompiler;
 
+typedef enum {
+    RK_ACTION_BUILD,
+    RK_ACTION_LEX,
+} RkActionKind;
+
+typedef struct {
+    char const * input;
+} RkActionBuild;
+
+typedef struct {
+    char const * input;
+} RkActionLex;
+
+typedef struct {
+    RkActionKind kind;
+    union {
+        RkActionBuild build;
+        RkActionLex lex;
+    };
+} RkAction;
+
+static inline
+RkAction rk_action_build(char const * input) {
+    return (RkAction){
+        .kind = RK_ACTION_BUILD,
+        .build = (RkActionBuild){.input = input},
+    };
+}
+
+static inline
+RkAction rk_action_lex(char const * input) {
+    return (RkAction){
+        .kind = RK_ACTION_LEX,
+        .lex = (RkActionLex){.input = input},
+    };
+}
+
 static inline noreturn
-void rk_compiler_flush_and_exit(RkCompiler * const compiler, rk_i32 const code) {
+void rk_diag_flush_and_exit(RkDiag * const diag, rk_i32 const code) {
     // TODO: hardcore output
-    rk_diag_flush(&compiler->diag, stderr);
-    rk_diag_dealloc(&compiler->diag);
+    rk_diag_flush(diag, stderr);
+    rk_diag_dealloc(diag);
     exit(code);
 }
 
 static inline
-RkUnit rk_compiler_unit_load_or_exit(RkCompiler * const compiler, char const * const path) {
+RkUnit rk_compiler_unit_load_or_exit(RkDiag * const diag, char const * const path) {
     RkUnitLoadResult result = rk_unit_try_load(path);
     if (result.kind == RK_UNIT_LOAD_OK) return result.unit;
-    rk_diag_can_not_load_unit(&compiler->diag, path, result.kind);
-    rk_compiler_flush_and_exit(compiler, -1);
+    rk_diag_can_not_load_unit(diag, path, result.kind);
+    rk_diag_flush_and_exit(diag, -1);
 }
 
 static
-void rk_analyze_command_build(
-    RkCompiler * const compiler,
+void rk_compile_unit(RkDiag * const diag, RkUnit unit) {
+    RK_TODO("");
+    rk_unit_dealloc(&unit);
+}
+
+static
+void rk_compile(RkDiag * const diag, char const * const path) {
+    RkUnit unit = rk_compiler_unit_load_or_exit(diag, path);
+    rk_diag_print(diag, RK_CYAN_BOLD "load" RK_WHITE_BOLD ": %s", unit.path.ptr);
+    rk_compile_unit(diag, unit);
+}
+
+static
+RkActionBuild rk_analyze_build_command(
+    RkDiag * const diag,
     rk_i32 const argc,
     char const * const * const argv
 ) {
     if (argc == 0) {
-        rk_diag_print(&compiler->diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": expected " RK_MAGENTA_BOLD "<INPUT>" "\n" RK_CLEAN);
-        rk_compiler_flush_and_exit(compiler, -1);
+        rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": expected " RK_MAGENTA_BOLD "<INPUT>" "\n");
+        rk_diag_print(
+            diag,
+            RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " use `"
+            RK_CYAN_BOLD "build" RK_ORANGE_BOLD " --help"
+            RK_BLACK_BOLD_ITALIC "` for more information\n"
+            RK_CLEAN
+        );
+        rk_diag_flush_and_exit(diag, -1);
     }
 
     if (argc != 1) {
-        rk_diag_print(&compiler->diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": too many args\n" RK_CLEAN);
-        rk_compiler_flush_and_exit(compiler, -1);
+        rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": too many args\n" RK_CLEAN);
+        rk_diag_flush_and_exit(diag, -1);
     }
 
     if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-h") == 0) {
-        rk_diag_build_help(&compiler->diag);
-        rk_compiler_flush_and_exit(compiler, 0);
+        rk_diag_print(diag, RK_GREEN_BOLD "USAGE\n");
+        rk_diag_print(diag, "    ");
+        rk_diag_command(diag, RK_COMMAND_BUILD);
+        rk_diag_print(diag, RK_GREEN_BOLD "DESCRIPTION\n");
+        rk_diag_print(diag,
+            "    " RK_BLACK_BOLD_ITALIC "build " RK_MAGENTA_BOLD "<INPUT>"
+            RK_BLACK_BOLD_ITALIC " in executable (`main.rk` -> `main.exe`)\n"
+        );
+        rk_diag_print(diag, RK_GREEN_BOLD "ARGS\n");
+        rk_diag_print(diag, "    " RK_MAGENTA_BOLD "<INPUT>" RK_BLACK_BOLD_ITALIC " ~ source file (aka `main.rk`)\n");
+        rk_diag_print(diag, RK_GREEN_BOLD "FLAGS\n");
+        rk_diag_print(diag, "    " RK_ORANGE_BOLD "--help" RK_WHITE_BOLD ", " RK_ORANGE_BOLD "-h" RK_BLACK_BOLD_ITALIC " ~ print this message\n");
+        rk_diag_write_cstr(diag, RK_CLEAN);
+        rk_diag_flush_and_exit(diag, 0);
     }
 
-    RkUnit unit = rk_compiler_unit_load_or_exit(compiler, argv[0]);
-
-    rk_sb_strip_right(&unit.src);
-    rk_diag_print(
-        &compiler->diag,
-        RK_CYAN_BOLD "%s\n" RK_MAGENTA_BOLD "%.*s" RK_CLEAN,
-        unit.path.ptr, (rk_u32)unit.src.len, unit.src.ptr
-    );
-
-    rk_unit_dealloc(&unit);
-    rk_compiler_flush_and_exit(compiler, 0);
+    return (RkActionBuild){.input = argv[0]};
 }
 
 static
-void rk_analyze_args(
+RkActionLex rk_analyze_lex_command(
+    RkDiag * const diag,
     rk_i32 const argc,
     char const * const * const argv
 ) {
-    RkCompiler compiler = {.exe = argv[0], .diag = RK_DIAG_EMPTY};
+    if (argc == 0) {
+        rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": expected " RK_MAGENTA_BOLD "<INPUT>" "\n");
+        rk_diag_print(
+            diag,
+            RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " use `"
+            RK_CYAN_BOLD "lex" RK_ORANGE_BOLD " --help"
+            RK_BLACK_BOLD_ITALIC "` for more information\n"
+            RK_CLEAN
+        );
+        rk_diag_flush_and_exit(diag, -1);
+    }
 
+    if (argc != 1) {
+        rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": too many args\n" RK_CLEAN);
+        rk_diag_flush_and_exit(diag, -1);
+    }
+
+    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-h") == 0) {
+        rk_diag_print(diag, RK_GREEN_BOLD "USAGE\n");
+        rk_diag_print(diag, "    ");
+        rk_diag_command(diag, RK_COMMAND_LEX);
+        rk_diag_print(diag, RK_GREEN_BOLD "DESCRIPTION\n");
+        rk_diag_print(diag,
+            "    " RK_BLACK_BOLD_ITALIC "lex " RK_MAGENTA_BOLD "<INPUT>"
+            RK_BLACK_BOLD_ITALIC " into tokens (`main.rk` -> `main.rk.lex`)\n"
+        );
+        rk_diag_print(diag, RK_GREEN_BOLD "ARGS\n");
+        rk_diag_print(diag, "    " RK_MAGENTA_BOLD "<INPUT>" RK_BLACK_BOLD_ITALIC " ~ source file (aka 'main.rk')\n");
+        rk_diag_print(diag, RK_GREEN_BOLD "FLAGS\n");
+        rk_diag_print(diag, "    " RK_ORANGE_BOLD "--help" RK_WHITE_BOLD ", " RK_ORANGE_BOLD "-h" RK_BLACK_BOLD_ITALIC " ~ print this message\n");
+        rk_diag_write_cstr(diag, RK_CLEAN);
+        rk_diag_flush_and_exit(diag, 0);
+    }
+
+
+    return (RkActionLex){.input = argv[0]};
+}
+
+static
+RkAction rk_analyze_args(
+    RkDiag * diag,
+    rk_i32 const argc,
+    char const * const * const argv
+) {
     if (argc < 2) {
-        rk_diag_usage(&compiler.diag, compiler.exe);
-        rk_compiler_flush_and_exit(&compiler, 0);
+        rk_diag_usage(diag, argv[0]);
+        rk_diag_flush_and_exit(diag, 0);
     }
 
-    char const * const command = argv[1];
-    if (strcmp(command, "build") == 0 || strcmp(command, "b") == 0) {
-        rk_analyze_command_build(&compiler, argc - 2, &argv[2]);
-    } else {
-        rk_diag_unknown_command(&compiler.diag, compiler.exe, command);
-        rk_compiler_flush_and_exit(&compiler, -1);
+    char const * const first = argv[1];
+
+    if (first[0] == '-') {
+        rk_diag_unknown_global_flag(diag, first);
+        rk_diag_flush_and_exit(diag, -1);
     }
+
+    for (rk_usz i = 0; i < RK_COMMAND_BUILD.names_len; i += 1) {
+        if (strcmp(first, RK_COMMAND_BUILD.names[i]) != 0) continue;
+        RkActionBuild build = rk_analyze_build_command(diag, argc - 2, &argv[2]);
+        return (RkAction){.kind = RK_ACTION_BUILD, .build = build};
+    }
+
+    for (rk_usz i = 0; i < RK_COMMAND_LEX.names_len; i += 1) {
+        if (strcmp(first, RK_COMMAND_LEX.names[i]) != 0) continue;
+        RkActionLex lex = rk_analyze_lex_command(diag, argc - 2, &argv[2]);
+        return (RkAction){.kind = RK_ACTION_LEX, .lex = lex};
+    }
+
+    rk_diag_unknown_command(diag, first);
+    rk_diag_flush_and_exit(diag, -1);
 }
 
 ////////////////////////////////////////
@@ -1006,7 +1152,9 @@ rk_i32 main(
     char const * const * const argv
 ) {
     rk_console_init();
-    rk_analyze_args(argc, argv);
+    RkDiag diag = RK_DIAG_EMPTY;
+    RkAction action = rk_analyze_args(&diag, argc, argv);
+    RK_TODO("");
     return 0;
 }
 
