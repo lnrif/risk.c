@@ -1,1 +1,6 @@
-fn main() {}
+fn main() {
+    var {a, b, c} = {1.0, 4.0, -2.0};
+    var {x, y} = {2.0, 3.0};
+    var d = abs(a * x + b * y + c) / sqrt(x ** x + y ** y);
+    print("%", d);
+}
