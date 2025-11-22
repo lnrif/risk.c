@@ -28,7 +28,7 @@ typedef unsigned int       rk_u32;
 typedef unsigned long long rk_u64;
 
 typedef long long          rk_isz;
-typedef unsigned long long rk_usz;
+typedef unsigned long long rk_usize;
 
 typedef float              rk_f32;
 typedef double             rk_f64;
@@ -152,7 +152,7 @@ void rk_caller_println(RK_Caller caller) {
     rk_failed_assert(RK_CALLER_HERE, expr, expr_len, fmt, args) \
 
 static inline
-rk_u32 rk_decimal_len(rk_usz x) {
+rk_u32 rk_decimal_len(rk_usize x) {
     rk_u32 n = 1;
     while (x >= 10) { x /= 10; n += 1; }
     return n;
@@ -182,7 +182,7 @@ static noreturn
 void rk_failed_assert(
     RK_Caller caller,
     char const *expr,
-    rk_usz len,
+    rk_usize len,
     char const *fmt, ...
 ) {
     rk_u32 num_len = rk_decimal_len(caller.line);
@@ -201,7 +201,7 @@ void rk_failed_assert(
     printf(RK_CYAN_BOLD "%*s |\n", num_len, "");
     printf("%u | " RK_MAGENTA_BOLD "RK_ASSERT(%s, ...)\n", caller.line, expr);
     printf(RK_CYAN_BOLD "%*s |           " RK_RED_BOLD, num_len, "");
-    for (rk_usz i = 0; i < len; i += 1) putchar('^');
+    for (rk_usize i = 0; i < len; i += 1) putchar('^');
     printf(" must be true\n");
     printf(RK_CLEAN);
     exit(1);
@@ -268,7 +268,7 @@ void rk_failed_assert(
 #define RK_LIST_EXTEND(d1, s1, dlen, dcap, slen, ...)                       \
     do {                                                                    \
         RK_LIST_RESERVE(d1, dlen, dcap, slen);                              \
-        for (rk_usz i = 0; i < (slen); i += 1) {                            \
+        for (rk_usize i = 0; i < (slen); i += 1) {                            \
             (d1)[(dlen) + i] = (s1)[i];                                     \
         }                                                                   \
         (dlen) += slen;                                                     \
@@ -290,8 +290,8 @@ void rk_failed_assert(
 )                                                                           \
     typedef struct {                                                        \
         TYPE     *ptr;                                                      \
-        rk_usz len;                                                         \
-        rk_usz cap;                                                         \
+        rk_usize len;                                                         \
+        rk_usize cap;                                                         \
     } NAME;                                                                 \
                                                                             \
     typedef struct {                                                        \
@@ -301,11 +301,11 @@ void rk_failed_assert(
                                                                             \
     typedef struct {                                                        \
         TYPE const *ptr;                                                    \
-        rk_usz   len;                                                       \
+        rk_usize   len;                                                       \
     } SLICE;                                                                \
                                                                             \
     static                                                                  \
-    NAME PREFIX##_alloc(rk_usz cap) {                                       \
+    NAME PREFIX##_alloc(rk_usize cap) {                                       \
         NAME buf = {0};                                                     \
         RK_LIST_ALLOC(buf.ptr, buf.len, buf.cap, cap);                      \
         return buf;                                                         \
@@ -317,13 +317,13 @@ void rk_failed_assert(
     }                                                                       \
                                                                             \
     static                                                                  \
-    void PREFIX##_reserve(NAME *buf, rk_usz add) {                          \
+    void PREFIX##_reserve(NAME *buf, rk_usize add) {                          \
         RK_LIST_RESERVE(buf->ptr, buf->len, buf->cap, add);                 \
     }                                                                       \
                                                                             \
     static                                                                  \
     SLICE PREFIX##_extend(NAME *buf, SLICE slice) {                         \
-        rk_usz start = buf->len;                                            \
+        rk_usize start = buf->len;                                            \
         RK_LIST_EXTEND(buf->ptr, slice.ptr, buf->len, buf->cap, slice.len); \
         return (SLICE){.ptr = &buf->ptr[start], .len = slice.len};          \
     }                                                                       \
@@ -336,7 +336,7 @@ void rk_failed_assert(
     }                                                                       \
                                                                             \
     static                                                                  \
-    SLICE PREFIX##_slice(NAME const *buf, rk_usz start, rk_usz len) {       \
+    SLICE PREFIX##_slice(NAME const *buf, rk_usize start, rk_usize len) {       \
         RK_ASSERT(start + len <= buf->len, "");                             \
         return (SLICE){.ptr = &buf->ptr[start], .len = len};                \
     }                                                                       \
@@ -362,19 +362,19 @@ void rk_failed_assert(
     }                                                                       \
                                                                             \
     static                                                                  \
-    void PREFIX##_pop_n(NAME *buf, rk_usz n) {                              \
+    void PREFIX##_pop_n(NAME *buf, rk_usize n) {                              \
         RK_ASSERT(buf->len >= n, #NAME " not have %llu items", n);          \
         buf->len -= n;                                                      \
     }                                                                       \
                                                                             \
     static inline                                                           \
-    TYPE PREFIX##_at(NAME const *buf, rk_usz index) {                       \
+    TYPE PREFIX##_at(NAME const *buf, rk_usize index) {                       \
         RK_ASSERT(index < buf->len, "index out of bounds");                 \
         return buf->ptr[index];                                             \
     }                                                                       \
                                                                             \
     static inline                                                           \
-    TYPE * PREFIX##_at_mut(NAME *buf, rk_usz index) {                       \
+    TYPE * PREFIX##_at_mut(NAME *buf, rk_usize index) {                       \
         RK_ASSERT(index < buf->len, "index `%llu` out of bounds", index);   \
         return &buf->ptr[index];                                            \
     }                                                                       \
@@ -390,7 +390,7 @@ void rk_failed_assert(
 
 RK_LIST(
     RkStrBuf, RkStrRef, RkStrIdx,
-    rk_sb, char, rk_usz, RK_USZ_MAX,
+    rk_sb, char, rk_usize, RK_USZ_MAX,
 )
 
 #define RK_SB_EMPTY (RkStrBuf){.ptr = NULL, .len = 0, .cap = 0}
@@ -442,10 +442,10 @@ void rk_sb_vprintf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, va_list args
 
     char *start = &buf->ptr[buf->len];
     char *end = &buf->ptr[buf->len + fmt_len];
-    rk_usz len = end - start;
+    rk_usize len = end - start;
 
     vsnprintf(start, fmt_len + 1, fmt, args);
-    for (rk_usz i = 1; i < n; i += 1) {
+    for (rk_usize i = 1; i < n; i += 1) {
         memcpy(&start[len * i], start, len);
     }
 
@@ -465,8 +465,8 @@ void rk_sb_printf_repeat(RkStrBuf *buf, rk_u32 n, char const *fmt, ...) {
 
 typedef struct {
     char  *ptr;
-    rk_usz len;
-    rk_usz cap;
+    rk_usize len;
+    rk_usize cap;
 } RkPathBuf;
 
 #define RK_PB_EMPTY (RkPathBuf){.ptr = NULL, .len = 0, .cap = 0}
@@ -482,11 +482,11 @@ static
 void rk_pb_join(RkPathBuf *path, RkStrRef add) {
     if (add.len == 0) return;
 
-    for (rk_usz i = 0; i <= add.len; i += 1) {
+    for (rk_usize i = 0; i <= add.len; i += 1) {
         RK_ASSERT(add.ptr[i] != '\0', "unexpected NULL in slice");
     }
 
-    rk_usz reserve_len = add.len + 1;
+    rk_usize reserve_len = add.len + 1;
     if (path->len > 0) {
         // strip NULL
         path->len -= 1;
@@ -501,8 +501,8 @@ void rk_pb_join(RkPathBuf *path, RkStrRef add) {
 }
 
 static inline
-char const *rk_pb_tail(char const * const path, rk_usz n) {
-    rk_usz len = strlen(path);
+char const *rk_pb_tail(char const * const path, rk_usize n) {
+    rk_usize len = strlen(path);
     RK_ASSERT(len > 0, "expected non-empty path");
     RK_ASSERT(n > 0, "expected at least 1 component");
 
@@ -538,7 +538,7 @@ typedef enum {
 
 typedef struct {
     rk_u8 *ptr;
-    rk_usz len;
+    rk_usize len;
 } RkBytes;
 
 static inline
@@ -589,7 +589,7 @@ static inline
 void rk_file_save(
     char const * const path,
     rk_u8 const * const buf,
-    rk_usz const len
+    rk_usize const len
 ) {
     FILE *file;
 
@@ -611,14 +611,14 @@ RkFileLoadResult rk_file_try_load(char const *path) {
     if (kind != RK_FILE_LOAD_OK) return (RkFileLoadResult){.kind = kind, .bytes = {0}};
 
     fseek(file, 0, SEEK_END);
-    rk_usz file_len = ftell(file);
+    rk_usize file_len = ftell(file);
     RK_ASSERT(file_len != RK_U32_MAX, "failed getting file len");
     fseek(file, 0, SEEK_SET);
 
     rk_u8 *buf = RK_ALLOC_ARRAY(file_len, rk_u8);
     RK_ASSERT(buf != NULL, "failed allocating buf");
 
-    rk_usz read = fread(buf, 1, file_len, file);
+    rk_usize read = fread(buf, 1, file_len, file);
     RK_ASSERT(read == file_len, "incomplete reading file");
 
     RK_ASSERT(fclose(file) == 0, "failed close file");
@@ -658,7 +658,7 @@ typedef struct {
 } RkLine;
 
 static inline
-rk_usz rk_utf8_len(rk_u8 b) {
+rk_usize rk_utf8_len(rk_u8 b) {
     if      ((b & 0xFF) < 0x80)  return 1;
     else if ((b & 0xE0) == 0xC0) return 2;
     else if ((b & 0xF0) == 0xE0) return 3;
@@ -670,14 +670,14 @@ rk_usz rk_utf8_len(rk_u8 b) {
 static
 RkLine rk_line(
     char const *ptr,
-    rk_usz len,
-    rk_usz pos,
+    rk_usize len,
+    rk_usize pos,
     rk_u32 tab
 ) {
-    rk_usz start = 0;
-    rk_usz line = 1;
-    rk_usz column = 1;
-    for (rk_usz i = 0; i < pos; i += rk_utf8_len(ptr[i])) {
+    rk_usize start = 0;
+    rk_usize line = 1;
+    rk_usize column = 1;
+    for (rk_usize i = 0; i < pos; i += rk_utf8_len(ptr[i])) {
         rk_u8 b = ptr[i];
 
         if (b == '\n') {
@@ -690,7 +690,7 @@ RkLine rk_line(
         else           column += 1;
     }
 
-    rk_usz end = start;
+    rk_usize end = start;
     while (end < len && ptr[end] != '\n') end += 1;
 
     RkSpan span = {.start = start, .len = end - start};
@@ -708,7 +708,7 @@ typedef struct {
 #define RK_DIAG_EMPTY ((RkDiag){.buf = RK_SB_EMPTY})
 
 static inline
-RkDiag rk_diag_alloc(rk_usz cap) {
+RkDiag rk_diag_alloc(rk_usize cap) {
     return (RkDiag){.buf = rk_sb_alloc(cap)};
 }
 
@@ -731,7 +731,7 @@ rk_diag_print(RkDiag *diag, const char *fmt, ...) {
 }
 
 static inline
-void rk_diag_flush(RkDiag *diag, FILE *stream) {
+void rk_diag_flush(RkDiag * const diag, FILE * const stream) {
     if (diag->buf.len == 0) return;
     size_t written = fwrite(diag->buf.ptr, 1, diag->buf.len, stream);
     RK_ASSERT(written == diag->buf.len, "failed writing to file");
@@ -739,16 +739,24 @@ void rk_diag_flush(RkDiag *diag, FILE *stream) {
 }
 
 static inline
-void rk_diag_dealloc(RkDiag * diag) {
+void rk_diag_dealloc(RkDiag * const diag) {
     rk_sb_dealloc(&diag->buf);
+}
+
+static inline
+void rk_diag_flush_and_dealloc(RkDiag * const diag, FILE * const stream) {
+    rk_diag_flush(diag, stream);
+    rk_diag_dealloc(diag);
 }
 
 ////////////////////////////////////////
 // Unit
 
+typedef RkStrBuf RkSrcBuf;
+
 typedef struct {
     RkPathBuf path;
-    RkStrBuf src;
+    RkSrcBuf src;
 } RkUnit;
 
 static inline
@@ -796,7 +804,7 @@ RkUnitLoadResult rk_unit_try_load(char const *path) {
     fseek(file, 0, SEEK_END);
     long file_len = ftell(file);
     RK_ASSERT(file_len != -1, "failed getting file len");
-    rk_usz len = file_len;
+    rk_usize len = file_len;
     fseek(file, 0, SEEK_SET);
 
     if (len > RK_POS_MAX) {
@@ -807,7 +815,7 @@ RkUnitLoadResult rk_unit_try_load(char const *path) {
     rk_u8 *buf = RK_ALLOC_ARRAY(len, rk_u8);
     RK_ASSERT(buf != NULL, "failed allocating buf");
 
-    rk_usz read = fread(buf, 1, len, file);
+    rk_usize read = fread(buf, 1, len, file);
     RK_ASSERT(read == len, "incomplete reading file");
 
     RK_ASSERT(fclose(file) == 0, "failed close file");
@@ -820,6 +828,623 @@ RkUnitLoadResult rk_unit_try_load(char const *path) {
         },
         .kind = RK_UNIT_LOAD_OK,
     };
+}
+
+////////////////////////////////////////
+// Lexer & Tokens
+
+typedef enum: rk_u8 {
+    /// End of file
+    RK_TOKEN_EOF,
+    /// Illegal bytes
+    RK_TOKEN_ILLEGAL,
+
+    /// (`0-9`)(`@0-9a-zA-Z_`)*
+    RK_TOKEN_INTEGER,
+    /// RK_TOKEN_INTEGER `.` RK_TOKEN_INTEGER
+    RK_TOKEN_FLOAT,
+    /// (`@a-zA-Z_`)(`@0-9a-zA-Z_`)*
+    RK_TOKEN_IDENT,
+    /// `"` (^`\n"`)* `"`
+    RK_TOKEN_STRING,
+    /// `"` (^`\n`)* `\n`
+    RK_TOKEN_STRING_UNTERMINATED,
+
+    /// `+`
+    RK_TOKEN_PLUS,
+    /// `-`
+    RK_TOKEN_MINUS,
+    /// `*`
+    RK_TOKEN_STAR,
+    /// `/`
+    RK_TOKEN_SLASH,
+
+    /// `+=`
+    RK_TOKEN_PLUS_EQ,
+    /// `-=`
+    RK_TOKEN_MINUS_EQ,
+    /// `*=`
+    RK_TOKEN_STAR_EQ,
+    /// `/=`
+    RK_TOKEN_SLASH_EQ,
+
+    /// `=`
+    RK_TOKEN_EQ,
+    /// `:=`
+    RK_TOKEN_COLON_EQ,
+
+    /// `==`
+    RK_TOKEN_EQ_EQ,
+    /// `!=`
+    RK_TOKEN_NOT_EQ,
+
+    /// `<`
+    RK_TOKEN_LT,
+    /// `>`
+    RK_TOKEN_GT,
+    /// `<=`
+    RK_TOKEN_LE,
+    /// `>=`
+    RK_TOKEN_GE,
+
+    /// `&&`
+    RK_TOKEN_AND_LOGIC,
+    /// `&`
+    RK_TOKEN_AND_BIT,
+
+    /// `||`
+    RK_TOKEN_OR_LOGIC,
+    /// `|`
+    RK_TOKEN_OR_BIT,
+
+    /// `@`
+    RK_TOKEN_AT,
+    /// `!`
+    RK_TOKEN_BANG,
+    /// `**`
+    RK_TOKEN_STAR_STAR,
+    /// `//`
+    RK_TOKEN_SLASH_SLASH,
+    /// `.*`
+    RK_TOKEN_DOT_STAR,
+
+    /// `=>`
+    RK_TOKEN_EQ_ARROW,
+    /// `<-`
+    RK_TOKEN_LT_ARROW,
+    /// `->`
+    RK_TOKEN_RT_ARROW,
+
+    /// `(`
+    RK_TOKEN_OPEN_PAREN,
+    /// `)`
+    RK_TOKEN_CLOSE_PAREN,
+
+    /// `{`
+    RK_TOKEN_OPEN_BRACE,
+    /// `}`
+    RK_TOKEN_CLOSE_BRACE,
+
+    /// `[`
+    RK_TOKEN_OPEN_BRACKET,
+    /// `]`
+    RK_TOKEN_CLOSE_BRACKET,
+
+    /// `[|`
+    RK_TOKEN_OPEN_ATTRIBUTES,
+    /// `|]`
+    RK_TOKEN_CLOSE_ATTRIBUTES,
+
+    /// `.`
+    RK_TOKEN_DOT,
+    /// `..`
+    RK_TOKEN_DOT_DOT,
+    /// `...`
+    RK_TOKEN_DOT_DOT_DOT,
+    /// `..<`
+    RK_TOKEN_DOT_DOT_LT,
+    /// `..=`
+    RK_TOKEN_DOT_DOT_EQ,
+
+    /// `,`
+    RK_TOKEN_COMMA,
+    /// `\'`
+    RK_TOKEN_APOSTROPHE,
+    /// `:`
+    RK_TOKEN_COLON,
+    /// `::`
+    RK_TOKEN_COLON_COLON,
+    /// `;`
+    RK_TOKEN_SEMICOLON,
+    
+    /// `_`
+    RK_TOKEN_UNDERSCORE,
+    /// `---`
+    RK_TOKEN_UNDEFINED,
+
+    /// `pub`
+    RK_TOKEN_PUB,
+    /// `mut`
+    RK_TOKEN_MUT,
+    
+    /// `let`
+    RK_TOKEN_LET,
+    /// `const`
+    RK_TOKEN_CONST,
+    /// `comptime`
+    RK_TOKEN_COMPTIME,
+
+    /// `null`
+    RK_TOKEN_NULL,
+    /// `true`
+    RK_TOKEN_TRUE,
+    /// `false`
+    RK_TOKEN_FALSE,
+
+    /// `fn`
+    RK_TOKEN_FN,
+    /// `enum`
+    RK_TOKEN_ENUM,
+    /// `struct`
+    RK_TOKEN_STRUCT,
+
+    /// `if`
+    RK_TOKEN_IF,
+    /// `then`
+    RK_TOKEN_THEN,
+    /// `elif`
+    RK_TOKEN_ELIF,
+    /// `else`
+    RK_TOKEN_ELSE,
+    
+    /// `match`
+    RK_TOKEN_MATCH,
+    /// `loop`
+    RK_TOKEN_LOOP,
+    /// `break`
+    RK_TOKEN_BREAK,
+    /// `return`
+    RK_TOKEN_RETURN,
+} RkTokenKind;
+
+static
+char const * rk_token_kind_tag_name(RkTokenKind kind) {
+    switch(kind) {
+        case RK_TOKEN_EOF:                 return "eof";
+        case RK_TOKEN_ILLEGAL:             return "ill";
+        
+        case RK_TOKEN_FLOAT:               return "float";
+        case RK_TOKEN_INTEGER:             return "integer";
+        case RK_TOKEN_IDENT:               return "ident";
+        case RK_TOKEN_STRING:              return "string";
+        case RK_TOKEN_STRING_UNTERMINATED: return "string.unt";
+        
+        case RK_TOKEN_PLUS:                return "plus";
+        case RK_TOKEN_MINUS:               return "minus";
+        case RK_TOKEN_STAR:                return "star";
+        case RK_TOKEN_SLASH:               return "slash";
+
+        case RK_TOKEN_PLUS_EQ:             return "plus_eq";
+        case RK_TOKEN_MINUS_EQ:            return "minus_eq";
+        case RK_TOKEN_STAR_EQ:             return "star_eq";
+        case RK_TOKEN_SLASH_EQ:            return "slash_eq";
+
+        case RK_TOKEN_EQ:                  return "eq";
+        case RK_TOKEN_COLON_EQ:            return "colon_eq";
+
+        case RK_TOKEN_EQ_EQ:               return "eq_eq";
+        case RK_TOKEN_NOT_EQ:              return "not_eq";
+
+        case RK_TOKEN_LT:                  return "lt";
+        case RK_TOKEN_GT:                  return "gt";
+        case RK_TOKEN_LE:                  return "le";
+        case RK_TOKEN_GE:                  return "ge";
+        
+        case RK_TOKEN_AND_LOGIC:           return "and_and";
+        case RK_TOKEN_AND_BIT:             return "and";
+
+        case RK_TOKEN_OR_LOGIC:            return "or_or";
+        case RK_TOKEN_OR_BIT:              return "or";
+        
+        case RK_TOKEN_AT:                  return "at";
+        case RK_TOKEN_BANG:                return "bang";
+        case RK_TOKEN_STAR_STAR:           return "star_star";
+        case RK_TOKEN_SLASH_SLASH:         return "slash_slash";
+        case RK_TOKEN_DOT_STAR:            return "dot_star";
+
+        case RK_TOKEN_EQ_ARROW:            return "eq_arrow";
+        case RK_TOKEN_LT_ARROW:            return "lt_arrow";
+        case RK_TOKEN_RT_ARROW:            return "rt_arrow";
+
+        case RK_TOKEN_OPEN_PAREN:          return "open_paren";
+        case RK_TOKEN_CLOSE_PAREN:         return "close_paren";
+
+        case RK_TOKEN_OPEN_BRACE:          return "open_brace";
+        case RK_TOKEN_CLOSE_BRACE:         return "close_brace";
+
+        case RK_TOKEN_OPEN_BRACKET:        return "open_bracket";
+        case RK_TOKEN_CLOSE_BRACKET:       return "close_bracket";
+
+        case RK_TOKEN_OPEN_ATTRIBUTES:     return "open_attr";
+        case RK_TOKEN_CLOSE_ATTRIBUTES:    return "close_attr";
+        
+        case RK_TOKEN_DOT:                 return "dot";
+        case RK_TOKEN_DOT_DOT:             return "dot_dot";
+        case RK_TOKEN_DOT_DOT_DOT:         return "dot_dot_dot";
+        case RK_TOKEN_DOT_DOT_LT:          return "dot_dot_lt";
+        case RK_TOKEN_DOT_DOT_EQ:          return "dot_dot_eq";
+
+        case RK_TOKEN_COMMA:               return "comma";
+        case RK_TOKEN_APOSTROPHE:          return "apostrophe";
+        case RK_TOKEN_COLON:               return "colon";
+        case RK_TOKEN_COLON_COLON:         return "colon_colon";
+        case RK_TOKEN_SEMICOLON:           return "semicolon";
+
+        case RK_TOKEN_UNDERSCORE:          return "underscore";
+        case RK_TOKEN_UNDEFINED:           return "undefined";
+
+        case RK_TOKEN_PUB:                 return "pub";
+        case RK_TOKEN_MUT:                 return "mut";
+
+        case RK_TOKEN_LET:                 return "let";
+        case RK_TOKEN_CONST:               return "const";
+        case RK_TOKEN_COMPTIME:            return "comptime";
+
+        case RK_TOKEN_NULL:                return "null";
+        case RK_TOKEN_TRUE:                return "true";
+        case RK_TOKEN_FALSE:               return "false";
+
+        case RK_TOKEN_FN:                  return "fn";
+        case RK_TOKEN_ENUM:                return "enum";
+        case RK_TOKEN_STRUCT:              return "struct";
+
+        case RK_TOKEN_IF:                  return "if";
+        case RK_TOKEN_THEN:                return "then keyword";
+        case RK_TOKEN_ELIF:                return "elif";
+        case RK_TOKEN_ELSE:                return "else";
+
+        case RK_TOKEN_MATCH:               return "match";
+        case RK_TOKEN_LOOP:                return "loop";
+        case RK_TOKEN_BREAK:               return "break";
+        case RK_TOKEN_RETURN:              return "return";
+    }
+}
+
+typedef struct {
+    RkSpan span;
+    RkTokenKind kind;
+} RkToken;
+
+typedef struct {
+    char const * const ptr;
+    rk_usize idx;
+    rk_usize end;
+} RkLexer;
+
+static inline
+RkToken rk_token_new(RkTokenKind kind, RkPos start, RkPos len) {
+    return (RkToken){.kind = kind, .span = {.start = start, .len = len}};
+}
+
+static inline
+RkLexer rk_lexer_new(char const * const ptr, rk_usize len) {
+    return (RkLexer){.ptr = ptr, .idx = 0, .end = len};
+}
+
+////////////////////////////////////////
+// Helping conditions
+
+static inline
+bool rk_is_digit(rk_u8 b) {
+    return '0' <= b && b <= '9';
+}
+
+static inline
+bool rk_is_alpha(rk_u8 b) {
+    return ('A' <= b && b <= 'Z') || ('a' <= b && b <= 'z');
+}
+
+static inline
+bool rk_is_integer_continue(rk_u8 b) {
+    return rk_is_digit(b) || rk_is_alpha(b) || b == '_' || b == '@';
+}
+
+static inline
+bool rk_is_ident_continue(rk_u8 b) {
+    return rk_is_integer_continue(b);
+}
+
+static inline
+bool rk_is_space(rk_u8 b) {
+    return b == ' ' || b == '\t' || b == '\r' || b == '\n';
+}
+
+////////////////////////////////////////
+// Lexer implementation
+
+static inline
+rk_u8 rk_lexer_peek(RkLexer const * const lexer, rk_usize n) {
+    rk_usize index = lexer->idx + n;
+    if (index < lexer->end) {
+        return lexer->ptr[index];
+    } else {
+        return 0;
+    }
+}
+
+static inline
+bool rk_lexer_at_eof(RkLexer * const lexer) {
+    return lexer->end <= lexer->idx;
+}
+
+static inline
+void rk_lexer_skip(RkLexer * const lexer, rk_usize n) {
+    RK_ASSERT(n > 0, "`n` is natural number");
+
+    rk_usize index = lexer->idx + n;
+    if (index <= lexer->end) {
+        lexer->idx = index;
+    } else {
+        lexer->idx = lexer->end;
+    }
+}
+
+#define rk_lexer_eat_while(lexer, condition) ({                 \
+    rk_usize loop_count = 0;                                    \
+    for (;;) {                                                  \
+        if (rk_lexer_at_eof(lexer)) break;                      \
+        rk_u8 b = rk_lexer_peek(lexer, 0);                      \
+        if (!(condition)) break;                                \
+        (lexer)->idx += 1;                                      \
+        loop_count += 1;                                        \
+        RK_ASSERT(loop_count <= 1024, "loop limit is reached"); \
+    };                                                          \
+    loop_count;                                                 \
+})
+
+static inline
+rk_usize rk_lexer_eat(RkLexer * const lexer, char const * const pat) {
+    RK_ASSERT(pat[0] != '\0', "expected that len of `pat` not equals zero");
+    for (rk_usize p = 0; true; p += 1) {
+        rk_usize i = lexer->idx + p;
+
+        if (pat[p] == 0) {
+            lexer->idx = i;
+            return p;
+        }
+
+        if (lexer->end <= i || lexer->ptr[i] != pat[p]) return 0;
+    }
+}
+
+static inline
+bool rk_lexer_kw(RkLexer * const lexer, char const * const kw) {
+    return rk_lexer_eat(lexer, kw) != 0 && !rk_is_ident_continue(rk_lexer_peek(lexer, 0));
+}
+
+static inline
+bool rk_lexer_ident(RkLexer * const lexer) {
+    rk_u8 b1 = rk_lexer_peek(lexer, 0);
+    rk_u8 b2 = rk_lexer_peek(lexer, 1);
+
+    if (rk_is_alpha(b1) || b1 == '_') {
+        lexer->idx += 1;
+    } else if (b1 == '@' && rk_is_ident_continue(b2)) {
+        lexer->idx += 2;
+    } else {
+        return false;
+    }
+
+    rk_lexer_eat_while(lexer, rk_is_ident_continue(b));
+    return true;
+}
+
+static inline
+RkTokenKind rk_lexer_number(RkLexer * const lexer) {
+    rk_lexer_eat_while(lexer, rk_is_integer_continue(b));
+    rk_u8 b1 = rk_lexer_peek(lexer, 0);
+    rk_u8 b2 = rk_lexer_peek(lexer, 1);
+    if (b1 != '.' || !rk_is_integer_continue(b2)) return RK_TOKEN_INTEGER;
+    lexer->idx += 2;
+    rk_lexer_eat_while(lexer, rk_is_integer_continue(b));
+    return RK_TOKEN_FLOAT;
+}
+
+static inline
+RkTokenKind rk_lexer_string(RkLexer * const lexer) {
+    rk_lexer_eat_while(lexer, b != '\n' && b != '"');
+    if (rk_lexer_eat(lexer, "\"") != 0) return RK_TOKEN_STRING;
+    else                                return RK_TOKEN_STRING_UNTERMINATED;
+}
+
+static inline
+void rk_lexer_skip_unused(RkLexer * const lexer) {
+    for (;;) {
+        rk_u8 b1 = rk_lexer_peek(lexer, 0);
+        rk_u8 b2 = rk_lexer_peek(lexer, 1);
+
+        if (b1 == '/' && b2 == '/') {
+            lexer->idx += 2;
+            rk_lexer_eat_while(lexer, b != '\n');
+
+            rk_lexer_eat(lexer, "\n");
+            continue;
+        }
+
+        if (rk_is_space(b1)) {
+            rk_lexer_eat_while(lexer, rk_is_space(b));
+            continue;
+        }
+
+        break;
+    }
+}
+
+static inline
+RkToken rk_lexer_next_token(RkLexer * const lexer) {
+    rk_usize start = lexer->idx;
+
+    rk_lexer_skip_unused(lexer);
+    if (rk_lexer_at_eof(lexer)) return rk_token_new(RK_TOKEN_EOF, start, 0);
+    
+    start = lexer->idx;
+    RkTokenKind kind = RK_TOKEN_EOF;
+    rk_u8 b = rk_lexer_peek(lexer, 0);
+    
+    if (false) {}
+    else if (rk_lexer_kw(lexer, "comptime")) kind = RK_TOKEN_COMPTIME;
+    else if (rk_lexer_kw(lexer, "struct"))   kind = RK_TOKEN_STRUCT;
+    else if (rk_lexer_kw(lexer, "return"))   kind = RK_TOKEN_RETURN;
+    else if (rk_lexer_kw(lexer, "const"))    kind = RK_TOKEN_CONST;
+    else if (rk_lexer_kw(lexer, "match"))    kind = RK_TOKEN_MATCH;
+    else if (rk_lexer_kw(lexer, "break"))    kind = RK_TOKEN_BREAK;
+    else if (rk_lexer_kw(lexer, "false"))    kind = RK_TOKEN_FALSE;
+    else if (rk_lexer_kw(lexer, "enum"))     kind = RK_TOKEN_ENUM;
+    else if (rk_lexer_kw(lexer, "true"))     kind = RK_TOKEN_TRUE;
+    else if (rk_lexer_kw(lexer, "null"))     kind = RK_TOKEN_NULL;
+    else if (rk_lexer_kw(lexer, "loop"))     kind = RK_TOKEN_LOOP;
+    else if (rk_lexer_kw(lexer, "then"))     kind = RK_TOKEN_THEN;
+    else if (rk_lexer_kw(lexer, "elif"))     kind = RK_TOKEN_ELIF;
+    else if (rk_lexer_kw(lexer, "else"))     kind = RK_TOKEN_ELSE;
+    else if (rk_lexer_kw(lexer, "let"))      kind = RK_TOKEN_LET;
+    else if (rk_lexer_kw(lexer, "mut"))      kind = RK_TOKEN_MUT;
+    else if (rk_lexer_kw(lexer, "pub"))      kind = RK_TOKEN_PUB;
+    else if (rk_lexer_kw(lexer, "fn"))       kind = RK_TOKEN_FN;
+    else if (rk_lexer_kw(lexer, "if"))       kind = RK_TOKEN_IF;
+    else if (rk_lexer_ident(lexer))          kind = RK_TOKEN_IDENT;
+    else if (rk_lexer_eat(lexer, "---"))     kind = RK_TOKEN_UNDEFINED;
+    else if (rk_lexer_eat(lexer, "..."))     kind = RK_TOKEN_DOT_DOT_DOT;
+    else if (rk_lexer_eat(lexer, "..<"))     kind = RK_TOKEN_DOT_DOT_LT;
+    else if (rk_lexer_eat(lexer, "..="))     kind = RK_TOKEN_DOT_DOT_EQ;
+    else if (rk_lexer_eat(lexer, "&&"))      kind = RK_TOKEN_AND_LOGIC;
+    else if (rk_lexer_eat(lexer, "||"))      kind = RK_TOKEN_OR_LOGIC;
+    else if (rk_lexer_eat(lexer, "+="))      kind = RK_TOKEN_PLUS_EQ;
+    else if (rk_lexer_eat(lexer, "*="))      kind = RK_TOKEN_STAR_EQ;
+    else if (rk_lexer_eat(lexer, "-="))      kind = RK_TOKEN_MINUS_EQ;
+    else if (rk_lexer_eat(lexer, "/="))      kind = RK_TOKEN_SLASH_EQ;
+    else if (rk_lexer_eat(lexer, "=="))      kind = RK_TOKEN_EQ_EQ;
+    else if (rk_lexer_eat(lexer, "!="))      kind = RK_TOKEN_NOT_EQ;
+    else if (rk_lexer_eat(lexer, "<="))      kind = RK_TOKEN_LE;
+    else if (rk_lexer_eat(lexer, ">="))      kind = RK_TOKEN_GE;
+    else if (rk_lexer_eat(lexer, "=>"))      kind = RK_TOKEN_EQ_ARROW;
+    else if (rk_lexer_eat(lexer, "<-"))      kind = RK_TOKEN_LT_ARROW;
+    else if (rk_lexer_eat(lexer, "->"))      kind = RK_TOKEN_RT_ARROW;
+    else if (rk_lexer_eat(lexer, "**"))      kind = RK_TOKEN_STAR_STAR;
+    else if (rk_lexer_eat(lexer, "//"))      kind = RK_TOKEN_SLASH_SLASH;
+    else if (rk_lexer_eat(lexer, ".*"))      kind = RK_TOKEN_DOT_STAR;
+    else if (rk_lexer_eat(lexer, ".."))      kind = RK_TOKEN_DOT_DOT;
+    else if (rk_lexer_eat(lexer, ":="))      kind = RK_TOKEN_COLON_EQ;
+    else if (rk_lexer_eat(lexer, "::"))      kind = RK_TOKEN_COLON_COLON;
+    else if (rk_lexer_eat(lexer, "|]"))      kind = RK_TOKEN_CLOSE_ATTRIBUTES;
+    else if (rk_lexer_eat(lexer, "[|"))      kind = RK_TOKEN_OPEN_ATTRIBUTES;
+    else if (rk_is_digit(b))                 kind = rk_lexer_number(lexer);
+    else if (rk_lexer_eat(lexer, "\""))      kind = rk_lexer_string(lexer);
+    else if (rk_lexer_eat(lexer, "@"))       kind = RK_TOKEN_AT;
+    else if (rk_lexer_eat(lexer, "&"))       kind = RK_TOKEN_AND_BIT;
+    else if (rk_lexer_eat(lexer, "|"))       kind = RK_TOKEN_OR_BIT;
+    else if (rk_lexer_eat(lexer, "+"))       kind = RK_TOKEN_PLUS;
+    else if (rk_lexer_eat(lexer, "-"))       kind = RK_TOKEN_MINUS;
+    else if (rk_lexer_eat(lexer, "*"))       kind = RK_TOKEN_STAR;
+    else if (rk_lexer_eat(lexer, "/"))       kind = RK_TOKEN_SLASH;
+    else if (rk_lexer_eat(lexer, "!"))       kind = RK_TOKEN_BANG;
+    else if (rk_lexer_eat(lexer, "<"))       kind = RK_TOKEN_LT;
+    else if (rk_lexer_eat(lexer, ">"))       kind = RK_TOKEN_GT;
+    else if (rk_lexer_eat(lexer, "="))       kind = RK_TOKEN_EQ;
+    else if (rk_lexer_eat(lexer, "("))       kind = RK_TOKEN_OPEN_PAREN;
+    else if (rk_lexer_eat(lexer, ")"))       kind = RK_TOKEN_CLOSE_PAREN;
+    else if (rk_lexer_eat(lexer, "{"))       kind = RK_TOKEN_OPEN_BRACE;
+    else if (rk_lexer_eat(lexer, "}"))       kind = RK_TOKEN_CLOSE_BRACE;
+    else if (rk_lexer_eat(lexer, "["))       kind = RK_TOKEN_OPEN_BRACKET;
+    else if (rk_lexer_eat(lexer, "]"))       kind = RK_TOKEN_CLOSE_BRACKET;
+    else if (rk_lexer_eat(lexer, "."))       kind = RK_TOKEN_DOT;
+    else if (rk_lexer_eat(lexer, ","))       kind = RK_TOKEN_COMMA;
+    else if (rk_lexer_eat(lexer, "'"))       kind = RK_TOKEN_APOSTROPHE;
+    else if (rk_lexer_eat(lexer, ":"))       kind = RK_TOKEN_COLON;
+    else if (rk_lexer_eat(lexer, ";"))       kind = RK_TOKEN_SEMICOLON;
+    else {
+        lexer->idx += 1;
+        kind = RK_TOKEN_ILLEGAL;
+    }
+
+    RkPos len = lexer->idx - start;
+    return rk_token_new(kind, start, len);
+}
+
+////////////////////////////////////////
+// Tokens
+
+RK_LIST(
+    RkTokenBuf, RkTokensSlice, RkTokensIndexed,
+    rk_tokens, RkToken,
+    rk_u32, RK_U32_MAX,
+)
+
+static inline
+RkTokenBuf rk_tokens_from_source(char const * const ptr, rk_usize len) {
+    RK_ASSERT(len <= RK_MB(1), "too big source");
+    RkTokenBuf buf = rk_tokens_alloc(len / 4);
+    RkLexer lexer = rk_lexer_new(ptr, len);
+    for (;;) {
+        RkToken token = rk_lexer_next_token(&lexer);
+        rk_tokens_push(&buf, token);
+        if (token.kind == RK_TOKEN_EOF) break;
+    }
+
+    // if (buf.len > 1) {
+    //     RkSpan span = buf.ptr[buf.len - 2].span;
+    //     RkPos start = span.start + span.len;
+    //     buf.ptr[buf.len - 1].span = (RkSpan){.start = start,.len = 0};
+    // }
+    return buf;
+}
+
+typedef struct {
+    RkUnit unit;
+    RkTokenBuf tokens;
+} RkLex;
+
+static inline
+RkLex rk_lex(RkUnit const unit, RkDiag * const diag) {
+    (void)diag; // TODO: add errors on illegal tokens
+    RK_ASSERT(unit.src.len <= RK_MB(1), "too big source");
+    RkTokenBuf tokens = rk_tokens_alloc(unit.src.len / 4);
+    RkLexer lexer = rk_lexer_new(unit.src.ptr, unit.src.len);
+    for (;;) {
+        RkToken token = rk_lexer_next_token(&lexer);
+        rk_tokens_push(&tokens, token);
+        if (token.kind == RK_TOKEN_EOF) break;
+    }
+    return (RkLex){.unit = unit, .tokens = tokens};
+}
+
+static
+void rk_lex_display(RkLex const * const lex, RkDiag * const diag) {
+    RkUnit const unit = lex->unit;
+    RkTokenBuf const tokens = lex->tokens;
+    
+    rk_f64 const ratio = (rk_f64)tokens.len / unit.src.len;
+    rk_diag_print(diag, RK_GREEN_BOLD "lex" RK_WHITE_BOLD ": %llu/%llu = %.2f\n" RK_CLEAN, tokens.len, unit.src.len, ratio);
+    
+    rk_u32 const token_width = rk_decimal_len(tokens.len - 1);
+    rk_u32 const byte_width = rk_decimal_len(unit.src.len);
+    for (rk_usize i = 0; i < tokens.len; i += 1) {
+        RkToken const token = tokens.ptr[i];
+        char const * const name = rk_token_kind_tag_name(token.kind);
+
+        rk_u32 start = token.span.start;
+        rk_u32 len = token.span.len;
+        char const * const lexeme = &unit.src.ptr[start];
+        rk_diag_print(diag,
+            RK_ORANGE_BOLD "%0*llu"           RK_WHITE_BOLD " | "
+            RK_YELLOW_BOLD "%-*s"             RK_WHITE_BOLD " | "
+            RK_CYAN_BOLD   "%*hu" ":" "%-*hu" RK_WHITE_BOLD " | "
+            RK_MAGENTA_BOLD "%.*s\n"          RK_CLEAN,
+            token_width, i,
+            13, name,
+            byte_width, start, byte_width, start + len,
+            len, lexeme
+        );
+    }
 }
 
 ////////////////////////////////////////
@@ -898,8 +1523,7 @@ typedef struct {
 static inline noreturn
 void rk_diag_flush_and_exit(RkDiag * const diag, rk_i32 const code) {
     // TODO: hardcore output
-    rk_diag_flush(diag, stderr);
-    rk_diag_dealloc(diag);
+    rk_diag_flush_and_dealloc(diag, stderr);
     exit(code);
 }
 
@@ -925,48 +1549,80 @@ void rk_compile(RkDiag * const diag, char const * const path) {
     rk_compile_unit(diag, unit);
 }
 
+static noreturn
+void rk_diag_build_command_help_and_exit(RkDiag * const diag) {
+    rk_diag_write_cstr(
+        diag,
+        RK_GREEN_BOLD "USAGE" "\n"
+        "    " RK_DIAG_COMMAND_BUILD "\n"
+        RK_GREEN_BOLD "DESCRIPTION" "\n"
+        "    " RK_BLACK_BOLD_ITALIC "build " RK_MAGENTA_BOLD "<FILE>"
+               RK_BLACK_BOLD_ITALIC " in executable (`main.rk` -> `main.exe`)" "\n"
+        RK_GREEN_BOLD "ARGS" "\n"
+        "    " RK_MAGENTA_BOLD "<FILE>" RK_BLACK_BOLD_ITALIC " ~ source file (aka 'main.rk')" "\n"
+        RK_GREEN_BOLD "FLAGS" "\n"
+        "    " RK_ORANGE_BOLD "--help" RK_WHITE_BOLD ", " RK_ORANGE_BOLD "-h" RK_BLACK_BOLD_ITALIC " ~ print this message" "\n"
+        RK_CLEAN
+    );
+    rk_diag_flush_and_exit(diag, 0);
+}
+
+static noreturn
+void rk_diag_failed_analyze_build_command(RkDiag * const diag) {
+    rk_diag_write_cstr(
+        diag,
+        RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " use `"
+        RK_RED_BOLD "risk" RK_CYAN_BOLD " build" RK_ORANGE_BOLD " --help"
+        RK_BLACK_BOLD_ITALIC "` for more information" "\n" RK_CLEAN
+    );
+    rk_diag_flush_and_exit(diag, -1);
+}
+
 static
 RkActionBuild rk_analyze_build_command(
     RkDiag * const diag,
     rk_i32 const argc,
     char const * const * const argv
 ) {
-    if (argc == 0) {
-        rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": expected " RK_MAGENTA_BOLD "<FILE>" "\n");
-        goto failed;
-    }
+    if (argc == 0) rk_diag_build_command_help_and_exit(diag);
 
     if (argc != 1) {
         rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": too many args\n" RK_CLEAN);
-        goto failed;
+        rk_diag_failed_analyze_build_command(diag);
     }
 
     if (strcmp(argv[0], "-h") == 0 || strcmp(argv[0], "--help") == 0) {
-        rk_diag_write_cstr(diag,
-            RK_GREEN_BOLD "USAGE" "\n"
-            "    " RK_DIAG_COMMAND_BUILD "\n"
-            RK_GREEN_BOLD "DESCRIPTION" "\n"
-            "    " RK_BLACK_BOLD_ITALIC "build " RK_MAGENTA_BOLD "<FILE>"
-                   RK_BLACK_BOLD_ITALIC " in executable (`main.rk` -> `main.exe`)" "\n"
-            RK_GREEN_BOLD "ARGS" "\n"
-            "    " RK_MAGENTA_BOLD "<FILE>" RK_BLACK_BOLD_ITALIC " ~ source file (aka 'main.rk')" "\n"
-            RK_GREEN_BOLD "FLAGS" "\n"
-            "    " RK_ORANGE_BOLD "--help" RK_WHITE_BOLD ", " RK_ORANGE_BOLD "-h" RK_BLACK_BOLD_ITALIC " ~ print this message" "\n"
-            RK_CLEAN
-        );
-        rk_diag_flush_and_exit(diag, 0);
+        rk_diag_build_command_help_and_exit(diag);
     } else if (argv[0][0] == '-') {
         rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown flag `" RK_ORANGE_BOLD "%s" RK_WHITE_BOLD "`" "\n", argv[0]);
-        goto failed;
+        rk_diag_failed_analyze_build_command(diag);
     }
 
     return (RkActionBuild){.input = argv[0]};
+}
 
-failed:
-    rk_diag_write_cstr(
-        diag,
+static noreturn
+void rk_diag_lex_command_help_and_exit(RkDiag * const diag) {
+    rk_diag_write_cstr(diag,
+        RK_GREEN_BOLD "USAGE" "\n"
+        "    " RK_DIAG_COMMAND_LEX "\n"
+        RK_GREEN_BOLD "DESCRIPTION" "\n"
+        "    " RK_BLACK_BOLD_ITALIC "lex " RK_MAGENTA_BOLD "<FILE>"
+               RK_BLACK_BOLD_ITALIC " into tokens (`main.rk` -> `main.rk.lex`)" "\n"
+        RK_GREEN_BOLD "ARGS" "\n"
+        "    " RK_MAGENTA_BOLD "<FILE>" RK_BLACK_BOLD_ITALIC " ~ source file (aka 'main.rk')" "\n"
+        RK_GREEN_BOLD "FLAGS" "\n"
+        "    " RK_ORANGE_BOLD "--help" RK_WHITE_BOLD ", " RK_ORANGE_BOLD "-h" RK_BLACK_BOLD_ITALIC " ~ print this message" "\n"
+        RK_CLEAN
+    );
+    rk_diag_flush_and_exit(diag, 0);
+}
+
+static noreturn
+void rk_diag_failed_analyze_lex_command(RkDiag * const diag) {
+    rk_diag_write_cstr(diag,
         RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " use `"
-        RK_RED_BOLD "risk" RK_CYAN_BOLD " build" RK_ORANGE_BOLD " --help"
+        RK_RED_BOLD "risk" RK_CYAN_BOLD " lex" RK_ORANGE_BOLD " --help"
         RK_BLACK_BOLD_ITALIC "` for more information" "\n" RK_CLEAN
     );
     rk_diag_flush_and_exit(diag, -1);
@@ -978,41 +1634,55 @@ RkActionLex rk_analyze_lex_command(
     rk_i32 const argc,
     char const * const * const argv
 ) {
-    if (argc == 0) {
-        rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": expected " RK_MAGENTA_BOLD "<FILE>" "\n");
-        goto failed;
-    }
+    if (argc == 0) rk_diag_lex_command_help_and_exit(diag);
 
     if (argc != 1) {
         rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": too many args\n" RK_CLEAN);
-        goto failed;
+        rk_diag_failed_analyze_lex_command(diag);
     }
 
     if (strcmp(argv[0], "-h") == 0 || strcmp(argv[0], "--help") == 0) {
-        rk_diag_write_cstr(diag,
-            RK_GREEN_BOLD "USAGE" "\n"
-            "    " RK_DIAG_COMMAND_LEX "\n"
-            RK_GREEN_BOLD "DESCRIPTION" "\n"
-            "    " RK_BLACK_BOLD_ITALIC "lex " RK_MAGENTA_BOLD "<FILE>"
-                   RK_BLACK_BOLD_ITALIC " into tokens (`main.rk` -> `main.rk.lex`)" "\n"
-            RK_GREEN_BOLD "ARGS" "\n"
-            "    " RK_MAGENTA_BOLD "<FILE>" RK_BLACK_BOLD_ITALIC " ~ source file (aka 'main.rk')" "\n"
-            RK_GREEN_BOLD "FLAGS" "\n"
-            "    " RK_ORANGE_BOLD "--help" RK_WHITE_BOLD ", " RK_ORANGE_BOLD "-h" RK_BLACK_BOLD_ITALIC " ~ print this message" "\n"
-            RK_CLEAN
-        );
-        rk_diag_flush_and_exit(diag, 0);
+        rk_diag_lex_command_help_and_exit(diag);
     } else if (argv[0][0] == '-') {
         rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown flag `" RK_ORANGE_BOLD "%s" RK_WHITE_BOLD "`" "\n", argv[0]);
-        goto failed;
+        rk_diag_failed_analyze_lex_command(diag);
     }
 
     return (RkActionLex){.input = argv[0]};
+}
 
-failed:
-    rk_diag_write_cstr(diag,
+static
+void rk_diag_error_renamed_compiler(RkDiag * const diag, char const * const compiler) {
+    rk_diag_print(
+        diag,
+        RK_RED_BOLD "error" RK_WHITE_BOLD ": compiler renamed to "
+        "`" RK_RED_BOLD "%s" RK_WHITE_BOLD "`" ", but original name `" RK_RED_BOLD "risk.exe" RK_WHITE_BOLD "`" "\n"
+        RK_YELLOW_BOLD_ITALIC "[!]" RK_BLACK_BOLD_ITALIC " it could be "
+        RK_BLACK_BOLD_ITALIC RK_UNDERLINE "risky" RK_BLACK_BOLD_ITALIC ", you know?" "\n"
+        RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " rename compiler to "
+        "`" RK_RED_BOLD "risk.exe" RK_BLACK_BOLD_ITALIC "` (plz)" "\n"
+        RK_CLEAN, compiler
+    );
+} 
+
+static
+void rk_diag_error_global_flag(RkDiag * const diag, char const * const flag) {
+    rk_diag_print(
+        diag,
+        RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown global flag `"
+        RK_ORANGE_BOLD "%s" RK_WHITE_BOLD "`" "\n"
+        RK_YELLOW_BOLD_ITALIC "[!]" RK_BLACK_BOLD_ITALIC " global " RK_ORANGE_BOLD "flags" " "
+        RK_BLACK_BOLD_ITALIC RK_UNDERLINE "don't exist" "\n"
+        RK_CLEAN, flag
+    );
+}
+
+static noreturn
+void rk_diag_for_more_info_and_exit(RkDiag * const diag) {
+    rk_diag_write_cstr(
+        diag,
         RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " use `"
-        RK_RED_BOLD "risk" RK_CYAN_BOLD " lex" RK_ORANGE_BOLD " --help"
+        RK_RED_BOLD "risk"
         RK_BLACK_BOLD_ITALIC "` for more information" "\n" RK_CLEAN
     );
     rk_diag_flush_and_exit(diag, -1);
@@ -1020,21 +1690,13 @@ failed:
 
 static
 RkAction rk_analyze_args(
-    RkDiag * diag,
+    RkDiag * const diag,
     rk_i32 const argc,
     char const * const * const argv
 ) {
     char const * const compiler = rk_pb_tail(argv[0], 1);
     if (strcmp(compiler, "risk") != 0 && strcmp(compiler, "risk.exe") != 0) {
-        rk_diag_print(diag,
-            RK_RED_BOLD "error" RK_WHITE_BOLD ": compiler renamed to "
-            "`" RK_RED_BOLD "%s" RK_WHITE_BOLD "`" ", but original name `" RK_RED_BOLD "risk.exe" RK_WHITE_BOLD "`" "\n"
-            RK_YELLOW_BOLD_ITALIC "[!]" RK_BLACK_BOLD_ITALIC " it could be "
-            RK_BLACK_BOLD_ITALIC RK_UNDERLINE "risky" RK_BLACK_BOLD_ITALIC ", you know?" "\n"
-            RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " rename compiler to "
-            "`" RK_RED_BOLD "risk.exe" RK_BLACK_BOLD_ITALIC "` (plz)" "\n"
-            RK_CLEAN, compiler
-        );
+        rk_diag_error_renamed_compiler(diag, compiler);
         rk_diag_flush_and_exit(diag, -1);
     }
 
@@ -1044,16 +1706,9 @@ RkAction rk_analyze_args(
     }
 
     char const * const first = argv[1];
-
     if (first[0] == '-') {
-        rk_diag_print(diag,
-            RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown global flag `"
-            RK_ORANGE_BOLD "%s" RK_WHITE_BOLD "`" "\n"
-            RK_YELLOW_BOLD_ITALIC "[!]" RK_BLACK_BOLD_ITALIC " global " RK_ORANGE_BOLD "flags" " "
-            RK_BLACK_BOLD_ITALIC RK_UNDERLINE "don't exist" "\n"
-            RK_CLEAN, first
-        );
-        goto failed;
+        rk_diag_error_global_flag(diag, first);
+        rk_diag_for_more_info_and_exit(diag);
     }
 
     if (strcmp(first, "b") == 0 || strcmp(first, "build") == 0) {
@@ -1067,14 +1722,7 @@ RkAction rk_analyze_args(
     }
 
     rk_diag_print(diag, RK_RED_BOLD "error" RK_WHITE_BOLD ": unknown command `" RK_CYAN_BOLD "%s" RK_WHITE_BOLD "`" "\n", first);
-
-failed:
-    rk_diag_write_cstr(diag,
-        RK_GREEN_BOLD_ITALIC "[?]" RK_BLACK_BOLD_ITALIC " use `"
-        RK_RED_BOLD "risk"
-        RK_BLACK_BOLD_ITALIC "` for more information" "\n" RK_CLEAN
-    );
-    rk_diag_flush_and_exit(diag, -1);
+    rk_diag_for_more_info_and_exit(diag);
 }
 
 ////////////////////////////////////////
@@ -1117,8 +1765,17 @@ rk_i32 main(
     rk_console_init();
     RkDiag diag = RK_DIAG_EMPTY;
     RkAction action = rk_analyze_args(&diag, argc, argv);
-    (void)action;
-    RK_TODO("");
+    switch (action.kind) {
+        case RK_ACTION_BUILD: RK_TODO("build action");
+        case RK_ACTION_LEX: {
+            RkUnit unit = rk_compiler_unit_load_or_exit(&diag, action.lex.input);
+            RkLex lex = rk_lex(unit, &diag);
+            rk_lex_display(&lex, &diag);
+            // TODO: dealloc `lex`
+        } break;
+    }
+
+    rk_diag_flush_and_dealloc(&diag, stdout);
     return 0;
 }
 
