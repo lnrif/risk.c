@@ -10,10 +10,17 @@
 
 > [!IMPORTANT]
 > **RISK** is unstable. There is ***risk***y code.
-> 
+>
 > *Currently working only with Windows x64.*
 
-**RISK** is compiler for learning and experiments with syntax and ABI.
+**RISK** is compiler for learning purposes and experiments with ABI.
+
+# Features
+
+- Linear type system & mutability
+- Extensible explicit drop system & defer
+- Comptime evaluation & meta programming (aka Zig comptime)
+- Experiments with optimizations & ABI
 
 <!-- use `rust` for highlighting -->
 
@@ -21,7 +28,7 @@
 
 ```rust
 fn main() {
-    std::print("Hello, World!");
+    std.print("Hello, World!");
 }
 ```
 
@@ -43,17 +50,24 @@ fn main() i32 {
     let buf = [0] * 64;
     let Ok(len) = std.read(&buf);
     let Ok(num) = buf[0..len].parse();
-    std::print("You write: {num:X}");
-    num
+    std.print("You write: {num:X}");
+    return num;
 }
 ```
 
 # Build
 
-You must have `clang`:
+You must have `clang`
 
-1. Download repository:
+1. Download:
     ```cmd
-    git clone https:\\github\...
+    git clone https://github.com/lnrif/risk.c.git
     ```
-2. ...
+2. Compile:
+    ```cmd
+    clang -O2 -Wall -Wextra -Wno-unused-function risk.c -o risk.exe
+    ```
+3. Use:
+    ```cmd
+    risk
+    ```
