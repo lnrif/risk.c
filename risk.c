@@ -164,7 +164,7 @@ void rk_failed(
     char const *type,
     char const *fmt, ...
 ) {
-    printf(RK_RED_BOLD "%s" RK_WHITE_BOLD ": ", type);
+    printf(RK_RED_BOLD "\n%s" RK_WHITE_BOLD ": ", type);
 
     va_list args;
     va_start(args, fmt);
@@ -187,7 +187,7 @@ void rk_failed_assert(
 ) {
     rk_u32 num_len = rk_decimal_len(caller.line);
 
-    printf(RK_RED_BOLD "assert" RK_WHITE_BOLD ": ");
+    printf(RK_RED_BOLD "\nassert" RK_WHITE_BOLD ": ");
 
     va_list args;
     va_start(args, fmt);
@@ -698,6 +698,17 @@ RkLine rk_line(
     return (RkLine){.span = span, .loc = loc};
 }
 
+static
+rk_u32 rk_utf8_chars_count(char const *ptr, rk_usize len) {
+    rk_usize i = 0;
+    rk_u32 n = 0;
+    for (;;) {
+        if (i >= len) return n;
+        n += 1;
+        i += rk_utf8_len(ptr[i]);
+    }
+}
+
 ////////////////////////////////////////
 // Diagnostic
 
@@ -727,6 +738,14 @@ rk_diag_print(RkDiag *diag, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     rk_diag_vprint(diag, fmt, args);
+    va_end(args);
+}
+
+static inline void
+rk_diag_repeat_print(RkDiag *diag, rk_u32 n, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    rk_sb_vprintf_repeat(&diag->buf, n, fmt, args);
     va_end(args);
 }
 
@@ -1006,6 +1025,110 @@ typedef enum: rk_u8 {
     /// `return`
     RK_TOKEN_RETURN,
 } RkTokenKind;
+
+static
+rk_u32 rk_token_kind_tag_name_len(RkTokenKind kind) {
+    switch(kind) {
+        case RK_TOKEN_EOF:                 return sizeof("eof") - 1;
+        case RK_TOKEN_ILLEGAL:             return sizeof("ill") - 1;
+        
+        case RK_TOKEN_FLOAT:               return sizeof("float") - 1;
+        case RK_TOKEN_INTEGER:             return sizeof("integer") - 1;
+        case RK_TOKEN_IDENT:               return sizeof("ident") - 1;
+        case RK_TOKEN_STRING:              return sizeof("string") - 1;
+        case RK_TOKEN_STRING_UNTERMINATED: return sizeof("string_unt") - 1;
+
+        case RK_TOKEN_PLUS:                return sizeof("plus") - 1;
+        case RK_TOKEN_MINUS:               return sizeof("minus") - 1;
+        case RK_TOKEN_STAR:                return sizeof("star") - 1;
+        case RK_TOKEN_SLASH:               return sizeof("slash") - 1;
+        
+        case RK_TOKEN_PLUS_EQ:             return sizeof("plus_eq") - 1;
+        case RK_TOKEN_MINUS_EQ:            return sizeof("minus_eq") - 1;
+        case RK_TOKEN_STAR_EQ:             return sizeof("star_eq") - 1;
+        case RK_TOKEN_SLASH_EQ:            return sizeof("slash_eq") - 1;
+        
+        case RK_TOKEN_EQ:                  return sizeof("eq") - 1;
+        case RK_TOKEN_COLON_EQ:            return sizeof("colon_eq") - 1;
+
+        case RK_TOKEN_EQ_EQ:               return sizeof("eq_eq") - 1;
+        case RK_TOKEN_NOT_EQ:              return sizeof("not_eq") - 1;
+
+        case RK_TOKEN_LT:                  return sizeof("lt") - 1;
+        case RK_TOKEN_GT:                  return sizeof("gt") - 1;
+        case RK_TOKEN_LE:                  return sizeof("le") - 1;
+        case RK_TOKEN_GE:                  return sizeof("ge") - 1;
+        
+        case RK_TOKEN_AND_LOGIC:           return sizeof("and_and") - 1;
+        case RK_TOKEN_AND_BIT:             return sizeof("and") - 1;
+
+        case RK_TOKEN_OR_LOGIC:            return sizeof("or_or") - 1;
+        case RK_TOKEN_OR_BIT:              return sizeof("or") - 1;
+        
+        case RK_TOKEN_AT:                  return sizeof("at") - 1;
+        case RK_TOKEN_BANG:                return sizeof("bang") - 1;
+        case RK_TOKEN_STAR_STAR:           return sizeof("star_star") - 1;
+        case RK_TOKEN_SLASH_SLASH:         return sizeof("slash_slash") - 1;
+        case RK_TOKEN_DOT_STAR:            return sizeof("dot_star") - 1;
+
+        case RK_TOKEN_EQ_ARROW:            return sizeof("eq_arrow") - 1;
+        case RK_TOKEN_LT_ARROW:            return sizeof("lt_arrow") - 1;
+        case RK_TOKEN_RT_ARROW:            return sizeof("rt_arrow") - 1;
+
+        case RK_TOKEN_OPEN_PAREN:          return sizeof("open_paren") - 1;
+        case RK_TOKEN_CLOSE_PAREN:         return sizeof("close_paren") - 1;
+
+        case RK_TOKEN_OPEN_BRACE:          return sizeof("open_brace") - 1;
+        case RK_TOKEN_CLOSE_BRACE:         return sizeof("close_brace") - 1;
+
+        case RK_TOKEN_OPEN_BRACKET:        return sizeof("open_bracket") - 1;
+        case RK_TOKEN_CLOSE_BRACKET:       return sizeof("close_bracket") - 1;
+
+        case RK_TOKEN_OPEN_ATTRIBUTES:     return sizeof("open_attr") - 1;
+        case RK_TOKEN_CLOSE_ATTRIBUTES:    return sizeof("close_attr") - 1;
+        
+        case RK_TOKEN_DOT:                 return sizeof("dot") - 1;
+        case RK_TOKEN_DOT_DOT:             return sizeof("dot_dot") - 1;
+        case RK_TOKEN_DOT_DOT_DOT:         return sizeof("dot_dot_dot") - 1;
+        case RK_TOKEN_DOT_DOT_LT:          return sizeof("dot_dot_lt") - 1;
+        case RK_TOKEN_DOT_DOT_EQ:          return sizeof("dot_dot_eq") - 1;
+
+        case RK_TOKEN_COMMA:               return sizeof("comma") - 1;
+        case RK_TOKEN_APOSTROPHE:          return sizeof("apostrophe") - 1;
+        case RK_TOKEN_COLON:               return sizeof("colon") - 1;
+        case RK_TOKEN_COLON_COLON:         return sizeof("colon_colon") - 1;
+        case RK_TOKEN_SEMICOLON:           return sizeof("semicolon") - 1;
+
+        case RK_TOKEN_UNDERSCORE:          return sizeof("underscore") - 1;
+        case RK_TOKEN_UNDEFINED:           return sizeof("undefined") - 1;
+
+        case RK_TOKEN_PUB:                 return sizeof("pub") - 1;
+        case RK_TOKEN_MUT:                 return sizeof("mut") - 1;
+
+        case RK_TOKEN_LET:                 return sizeof("let") - 1;
+        case RK_TOKEN_CONST:               return sizeof("const") - 1;
+        case RK_TOKEN_COMPTIME:            return sizeof("comptime") - 1;
+
+        case RK_TOKEN_NULL:                return sizeof("null") - 1;
+        case RK_TOKEN_TRUE:                return sizeof("true") - 1;
+        case RK_TOKEN_FALSE:               return sizeof("false") - 1;
+
+        case RK_TOKEN_FN:                  return sizeof("fn") - 1;
+        case RK_TOKEN_ENUM:                return sizeof("enum") - 1;
+        case RK_TOKEN_STRUCT:              return sizeof("struct") - 1;
+
+        case RK_TOKEN_IF:                  return sizeof("if") - 1;
+        case RK_TOKEN_THEN:                return sizeof("then") - 1;
+        case RK_TOKEN_ELIF:                return sizeof("elif") - 1;
+        case RK_TOKEN_ELSE:                return sizeof("else") - 1;
+
+        case RK_TOKEN_MATCH:               return sizeof("match") - 1;
+        case RK_TOKEN_LOOP:                return sizeof("loop") - 1;
+        case RK_TOKEN_BREAK:               return sizeof("break") - 1;
+        case RK_TOKEN_RETURN:              return sizeof("return") - 1;
+    }
+}
+
 
 static
 char const * rk_token_kind_tag_name(RkTokenKind kind) {
@@ -1362,7 +1485,12 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
     else if (rk_lexer_eat(lexer, ":"))       kind = RK_TOKEN_COLON;
     else if (rk_lexer_eat(lexer, ";"))       kind = RK_TOKEN_SEMICOLON;
     else {
-        lexer->idx += 1;
+        lexer->idx += rk_utf8_len(b);
+        rk_usize save = lexer->idx;
+        RkToken next = rk_lexer_next_token(lexer);
+        if (save != next.span.start || next.kind != RK_TOKEN_ILLEGAL) {
+            lexer->idx = save;
+        }
         kind = RK_TOKEN_ILLEGAL;
     }
 
@@ -1423,27 +1551,107 @@ void rk_lex_display(RkLex const * const lex, RkDiag * const diag) {
     RkTokenBuf const tokens = lex->tokens;
     
     rk_f64 const ratio = (rk_f64)tokens.len / unit.src.len;
-    rk_diag_print(diag, RK_GREEN_BOLD "lex" RK_WHITE_BOLD ": %llu/%llu = %.2f\n" RK_CLEAN, tokens.len, unit.src.len, ratio);
+    rk_diag_print(diag, RK_GREEN_BOLD "ratio" RK_WHITE_BOLD ": %llu/%llu = %.2f\n" RK_CLEAN, tokens.len, unit.src.len, ratio);
     
     rk_u32 const token_width = rk_decimal_len(tokens.len - 1);
     rk_u32 const byte_width = rk_decimal_len(unit.src.len);
+    RK_ASSERT(token_width >= 1, "");
+    RK_ASSERT(byte_width >= 1, "");
+
+    rk_u32 tag_width = 0;
+    rk_u32 lexeme_width = 0;
+    for (rk_usize i = 0; i < tokens.len; i += 1) {
+        RkToken const token = tokens.ptr[i];
+        rk_u32 tag_len = rk_token_kind_tag_name_len(token.kind);
+        rk_u32 lexeme_len = rk_utf8_chars_count(&lex->unit.src.ptr[token.span.start], token.span.len);
+        if (tag_width < tag_len)          tag_width = tag_len;
+        if (lexeme_width < lexeme_len) lexeme_width = lexeme_len;
+    }
+    
+    rk_u32 span_width = byte_width * 2 + 1;
+    if (span_width < 4)   span_width   = 4;
+    if (lexeme_width < 6) lexeme_width = 6;
+
+    rk_diag_print(diag, RK_BLACK_BOLD);
+    rk_diag_print(diag, "┌");
+    rk_diag_repeat_print(diag, 1 + token_width + 1, "─");
+    rk_diag_print(diag, "┬");
+    rk_diag_repeat_print(diag, 1 + tag_width + 1, "─");
+    rk_diag_print(diag, "┬");
+    rk_diag_repeat_print(diag, 1 + span_width + 1, "─");
+    rk_diag_print(diag, "┬");
+    rk_diag_repeat_print(diag, 1 + lexeme_width + 1, "─");
+    rk_diag_print(diag, "┐");
+    rk_diag_print(diag, "\n" RK_CLEAN);
+
+    rk_diag_print(
+        diag,
+        RK_BLACK_BOLD "│ "
+        RK_ORANGE_BOLD  "%*s" "n"      "%*s" RK_BLACK_BOLD " │ "
+        RK_YELLOW_BOLD  "%*s" "tag"    "%*s" RK_BLACK_BOLD " │ "
+        RK_CYAN_BOLD    "%*s" "span"   "%*s" RK_BLACK_BOLD " │ "
+        RK_MAGENTA_BOLD "%*s" "lexeme" "%*s" RK_BLACK_BOLD " │" "\n",
+        (token_width - 1) / 2, "", (token_width - 1 + 1) / 2, "",
+        (tag_width - 3) / 2, "", (tag_width - 3 + 1) / 2, "",
+        (span_width - 4) / 2, "", (span_width - 4 + 1) / 2, "",
+        (lexeme_width - 6) / 2, "", (lexeme_width - 6 + 1) / 2, ""
+    );
+
     for (rk_usize i = 0; i < tokens.len; i += 1) {
         RkToken const token = tokens.ptr[i];
         char const * const name = rk_token_kind_tag_name(token.kind);
+        
+        rk_u32 span_space = byte_width * 2 + 1;
+        if (span_space > 4) span_space = 0;
+        else                span_space = 4 - span_space;
+
+        if (i % 16 == 0) {
+            rk_diag_print(diag, RK_BLACK_BOLD);
+            rk_diag_print(diag, "├");
+            rk_diag_repeat_print(diag, 1 + token_width + 1, "─");
+            rk_diag_print(diag, "┼");
+            rk_diag_repeat_print(diag, 1 + tag_width + 1, "─");
+            rk_diag_print(diag, "┼");
+            rk_diag_repeat_print(diag, 1 + (byte_width * 2 + 1 + span_space) + 1, "─");
+            rk_diag_print(diag, "┼");
+            rk_diag_repeat_print(diag, 1 + lexeme_width + 1, "─");
+            rk_diag_print(diag, "┤");
+            rk_diag_print(diag, "\n" RK_CLEAN);
+        }
 
         rk_u32 start = token.span.start;
         rk_u32 len = token.span.len;
+        rk_u32 lexeme_len = rk_utf8_chars_count(&lex->unit.src.ptr[token.span.start], len);
         char const * const lexeme = &unit.src.ptr[start];
-        rk_diag_print(diag,
-            RK_ORANGE_BOLD "%0*llu"           RK_WHITE_BOLD " | "
-            RK_YELLOW_BOLD "%-*s"             RK_WHITE_BOLD " | "
-            RK_CYAN_BOLD   "%*hu" ":" "%-*hu" RK_WHITE_BOLD " | "
-            RK_MAGENTA_BOLD "%.*s\n"          RK_CLEAN,
+
+        rk_diag_print(
+            diag,
+            RK_BLACK_BOLD "│ "
+            RK_ORANGE_BOLD "%0*llu"                 RK_BLACK_BOLD " │ "
+            RK_YELLOW_BOLD "%-*s"                   RK_BLACK_BOLD " │ "
+            RK_CYAN_BOLD   "%*hu" ":" "%-*hu" "%*s" RK_BLACK_BOLD " │ "
+            RK_MAGENTA_BOLD "%.*s" "%*s"            RK_BLACK_BOLD " │" "\n" RK_CLEAN,
             token_width, i,
-            13, name,
-            byte_width, start, byte_width, start + len,
-            len, lexeme
+            tag_width, name,
+            byte_width, start, byte_width, start + len, span_space, "",
+            len, lexeme,
+            lexeme_width - lexeme_len, ""
         );
+
+        if (i == tokens.len - 1) {
+            rk_diag_print(diag, RK_BLACK_BOLD);
+            rk_diag_print(diag, "└");
+            rk_diag_repeat_print(diag, 1 + token_width + 1, "─");
+            rk_diag_print(diag, "┴");
+            rk_diag_repeat_print(diag, 1 + tag_width + 1, "─");
+            rk_diag_print(diag, "┴");
+            rk_diag_repeat_print(diag, 1 + (byte_width * 2 + 1 + span_space) + 1, "─");
+            rk_diag_print(diag, "┴");
+            rk_diag_repeat_print(diag, 1 + lexeme_width + 1, "─");
+            rk_diag_print(diag, "┘");
+            rk_diag_print(diag, "\n" RK_CLEAN);
+            break;
+        }
     }
 }
 
