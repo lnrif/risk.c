@@ -8,12 +8,18 @@
 [Learn]: guide/learn.md
 [Architecture]: arch/arch.md
 
-> [!IMPORTANT]
-> **RISK** is unstable. There is ***risk***y code.
->
-> *Currently working only with Windows x64.*
+> [!WARNING]
+> THIS COMPILER IS A WORK IN PROGRESS! USE THIS COMPILER AT YOUR OWN ***RISK***!
 
 **RISK** is compiler for learning purposes and experiments with ABI.
+
+# Layers complete
+
+- [x] Tokens & lex
+- [ ] AST & parse
+- [ ] MIR & semantic checks 
+- [ ] IR & lowering to concrete platform
+- [ ] ASM
 
 # Features
 
@@ -54,6 +60,10 @@ fn main() i32 {
     return num;
 }
 ```
+
+# Platforms
+
+For now only Windows x64.
 
 # Build
 
