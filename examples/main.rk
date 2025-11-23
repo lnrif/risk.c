@@ -1,1 +1,3 @@
-let хэ = одын;
+fn main() {
+    std.print("Risk is self-known!");
+}

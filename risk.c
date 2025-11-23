@@ -677,6 +677,7 @@ RkLine rk_line(
     rk_usize start = 0;
     rk_usize line = 1;
     rk_usize column = 1;
+
     for (rk_usize i = 0; i < pos; i += rk_utf8_len(ptr[i])) {
         rk_u8 b = ptr[i];
 
@@ -855,6 +856,8 @@ RkUnitLoadResult rk_unit_try_load(char const *path) {
 typedef enum: rk_u8 {
     /// End of file
     RK_TOKEN_EOF,
+    /// Illegal bytes
+    RK_TOKEN_ILLEGAL,
 
     /// (`0-9`)(`@0-9a-zA-Z_`)*
     RK_TOKEN_INTEGER,
@@ -1028,6 +1031,7 @@ static
 rk_u32 rk_token_kind_tag_name_len(RkTokenKind kind) {
     switch(kind) {
         case RK_TOKEN_EOF:                 return sizeof("eof") - 1;
+        case RK_TOKEN_ILLEGAL:             return sizeof("illegal") - 1;
         
         case RK_TOKEN_FLOAT:               return sizeof("float") - 1;
         case RK_TOKEN_INTEGER:             return sizeof("integer") - 1;
@@ -1131,6 +1135,7 @@ static
 char const * rk_token_kind_tag_name(RkTokenKind kind) {
     switch(kind) {
         case RK_TOKEN_EOF:                 return "eof";
+        case RK_TOKEN_ILLEGAL:             return "illegal";
         
         case RK_TOKEN_FLOAT:               return "float";
         case RK_TOKEN_INTEGER:             return "integer";
@@ -1318,17 +1323,17 @@ void rk_lexer_skip(RkLexer * const lexer, rk_usize n) {
     }
 }
 
-#define rk_lexer_eat_while(lexer, condition) ({                 \
-    rk_usize loop_count = 0;                                    \
-    for (;;) {                                                  \
-        if (rk_lexer_at_eof(lexer)) break;                      \
-        rk_u8 b = rk_lexer_peek(lexer, 0);                      \
-        if (!(condition)) break;                                \
-        (lexer)->idx += 1;                                      \
-        loop_count += 1;                                        \
-        RK_ASSERT(loop_count <= 1024, "loop limit is reached"); \
-    };                                                          \
-    loop_count;                                                 \
+#define rk_lexer_eat_while(lexer, condition) ({                      \
+    rk_usize loop_count = 0;                                         \
+    for (;;) {                                                       \
+        if (rk_lexer_at_eof(lexer)) break;                           \
+        rk_u8 b = rk_lexer_peek(lexer, 0);                           \
+        if (!(condition)) break;                                     \
+        (lexer)->idx += rk_utf8_len(b);                              \
+        loop_count += 1;                                             \
+        RK_ASSERT(loop_count <= 65536, "loop limit is reached");     \
+    };                                                               \
+    loop_count;                                                      \
 })
 
 static inline
@@ -1504,14 +1509,13 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
     else if (rk_lexer_eat(lexer, ":"))       kind = RK_TOKEN_COLON;
     else if (rk_lexer_eat(lexer, ";"))       kind = RK_TOKEN_SEMICOLON;
     else {
-        RK_UNREACHABLE("");
-        // lexer->idx += rk_utf8_len(b1);
-        // rk_usize save = lexer->idx;
-        // RkToken next = rk_lexer_next_token(lexer);
-        // if (save != next.span.start || next.kind != RK_TOKEN_ILLEGAL) {
-        //     lexer->idx = save;
-        // }
-        // kind = RK_TOKEN_ILLEGAL;
+        lexer->idx += rk_utf8_len(b1);
+        rk_usize save = lexer->idx;
+        RkToken next = rk_lexer_next_token(lexer);
+        if (save != next.span.start || next.kind != RK_TOKEN_ILLEGAL) {
+            lexer->idx = save;
+        }
+        kind = RK_TOKEN_ILLEGAL;
     }
 
     RkPos len = lexer->idx - start;
@@ -1537,12 +1541,6 @@ RkTokenBuf rk_tokens_from_source(char const * const ptr, rk_usize len) {
         rk_tokens_push(&buf, token);
         if (token.kind == RK_TOKEN_EOF) break;
     }
-
-    // if (buf.len > 1) {
-    //     RkSpan span = buf.ptr[buf.len - 2].span;
-    //     RkPos start = span.start + span.len;
-    //     buf.ptr[buf.len - 1].span = (RkSpan){.start = start,.len = 0};
-    // }
     return buf;
 }
 
@@ -1611,33 +1609,31 @@ void rk_lex_display(RkLex const * const lex, RkDiag * const diag) {
         RK_YELLOW_BOLD  "%*s" "tag"    "%*s" RK_BLACK_BOLD " │ "
         RK_CYAN_BOLD    "%*s" "span"   "%*s" RK_BLACK_BOLD " │ "
         RK_MAGENTA_BOLD "%*s" "lexeme" "%*s" RK_BLACK_BOLD " │" "\n",
-        (token_width - 1) / 2, "", (token_width - 1 + 1) / 2, "",
-        (tag_width - 3) / 2, "", (tag_width - 3 + 1) / 2, "",
-        (span_width - 4) / 2, "", (span_width - 4 + 1) / 2, "",
+        (token_width  - 1) / 2, "", (token_width  - 1 + 1) / 2, "",
+        (tag_width    - 3) / 2, "", (tag_width    - 3 + 1) / 2, "",
+        (span_width   - 4) / 2, "", (span_width   - 4 + 1) / 2, "",
         (lexeme_width - 6) / 2, "", (lexeme_width - 6 + 1) / 2, ""
     );
-
+    
+    rk_u32 span_space = byte_width * 2 + 1;
+    if (span_space > 4) span_space = 0;
+    else                span_space = 4 - span_space;
+    
+    rk_diag_print(diag, RK_BLACK_BOLD);
+    rk_diag_print(diag, "├");
+    rk_diag_repeat_print(diag, 1 + token_width + 1, "─");
+    rk_diag_print(diag, "┼");
+    rk_diag_repeat_print(diag, 1 + tag_width + 1, "─");
+    rk_diag_print(diag, "┼");
+    rk_diag_repeat_print(diag, 1 + (byte_width * 2 + 1 + span_space) + 1, "─");
+    rk_diag_print(diag, "┼");
+    rk_diag_repeat_print(diag, 1 + lexeme_width + 1, "─");
+    rk_diag_print(diag, "┤");
+    rk_diag_print(diag, "\n" RK_CLEAN);
+    
     for (rk_usize i = 0; i < tokens.len; i += 1) {
         RkToken const token = tokens.ptr[i];
         char const * const name = rk_token_kind_tag_name(token.kind);
-        
-        rk_u32 span_space = byte_width * 2 + 1;
-        if (span_space > 4) span_space = 0;
-        else                span_space = 4 - span_space;
-
-        if (i % 16 == 0) {
-            rk_diag_print(diag, RK_BLACK_BOLD);
-            rk_diag_print(diag, "├");
-            rk_diag_repeat_print(diag, 1 + token_width + 1, "─");
-            rk_diag_print(diag, "┼");
-            rk_diag_repeat_print(diag, 1 + tag_width + 1, "─");
-            rk_diag_print(diag, "┼");
-            rk_diag_repeat_print(diag, 1 + (byte_width * 2 + 1 + span_space) + 1, "─");
-            rk_diag_print(diag, "┼");
-            rk_diag_repeat_print(diag, 1 + lexeme_width + 1, "─");
-            rk_diag_print(diag, "┤");
-            rk_diag_print(diag, "\n" RK_CLEAN);
-        }
 
         rk_u32 start = token.span.start;
         rk_u32 len = token.span.len;
@@ -1650,13 +1646,19 @@ void rk_lex_display(RkLex const * const lex, RkDiag * const diag) {
             RK_ORANGE_BOLD "%0*llu"                 RK_BLACK_BOLD " │ "
             RK_YELLOW_BOLD "%-*s"                   RK_BLACK_BOLD " │ "
             RK_CYAN_BOLD   "%*hu" ":" "%-*hu" "%*s" RK_BLACK_BOLD " │ "
-            RK_MAGENTA_BOLD "%.*s" "%*s"            RK_BLACK_BOLD " │" "\n" RK_CLEAN,
+            RK_MAGENTA_BOLD "%.*s" "%*s"            RK_BLACK_BOLD " │ ",
             token_width, i,
             tag_width, name,
             byte_width, start, byte_width, start + len, span_space, "",
             len, lexeme,
             lexeme_width - lexeme_len, ""
         );
+
+        // TODO: not eval location on each iteration, shift source and save previous location
+        RkLine line = rk_line(unit.src.ptr, unit.src.len, token.span.start, 4);
+        rk_diag_print(diag, RK_BLACK_BOLD_ITALIC "%s:%u:%u", unit.path.ptr, line.loc.line, line.loc.column);
+
+        rk_diag_print(diag, "\n" RK_CLEAN);
 
         if (i == tokens.len - 1) {
             rk_diag_print(diag, RK_BLACK_BOLD);
@@ -1676,7 +1678,246 @@ void rk_lex_display(RkLex const * const lex, RkDiag * const diag) {
 }
 
 ////////////////////////////////////////
-// Diagnostic extention
+// AST
+
+typedef rk_u32 RkAstU32;
+#define RK_AST_U32_INVALID RK_U32_MAX
+
+typedef RkAstU32 RkAstNodeId;
+#define RK_AST_NODE_Id_INVALID RK_AST_U32_INVALID
+
+typedef RkAstU32 RkAstNodeOffset;
+#define RK_AST_NODE_OFFSET_INVALID RK_AST_U32_INVALID
+
+#define RK_AST_NODE_ALIGNED __attribute__((aligned(alignof(rk_u32))))
+
+typedef enum: rk_u8 {
+    /// a
+    RK_AST_NODE_ATOM,
+    /// -a
+    RK_AST_NODE_UNARY,
+    /// a + b
+    RK_AST_NODE_BINARY,
+    /// if a then b [else c]
+    RK_AST_NODE_IF,
+    /// match a { ... }
+    RK_AST_NODE_MATCH,
+    /// (...)
+    /// [...]
+    /// {...}
+    RK_AST_NODE_COMBINED,
+    /// f(a, b)
+    /// f[a, b]
+    /// f { a, b }
+    RK_AST_NODE_CALL,
+    /// root file node
+    RK_AST_ROOT,
+} RkAstNodeKind;
+
+typedef enum: rk_u8 {
+    /// `null`
+    RK_AST_ATOM_NULL,
+    /// `true`
+    RK_AST_ATOM_TRUE,
+    /// `false`
+    RK_AST_ATOM_FALSE,
+    /// `ident`
+    RK_AST_ATOM_IDENT,
+    /// `69`
+    RK_AST_ATOM_INTEGER,
+    /// `1.0`
+    RK_AST_ATOM_FLOAT,
+    /// `"any bytes\n"`
+    RK_AST_ATOM_STRING,
+} RkAstAtomKind;
+
+typedef enum: rk_u8 {
+    // `+a`
+    RK_AST_UNARY_POS,
+    // `-a`
+    RK_AST_UNARY_NEG,
+    // `!a`
+    RK_AST_UNARY_NOT,
+    // `&a`
+    RK_AST_UNARY_REF,
+    // `a.*`
+    RK_AST_UNARY_DEREF,
+    // `mut a`
+    RK_AST_UNARY_MUT,
+    // `let a`
+    RK_AST_UNARY_LET,
+    // `const a`
+    RK_AST_UNARY_CONST,
+    // `comptime b`
+    RK_AST_UNARY_COMPTIME,
+} RkAstUnaryKind;
+
+typedef enum: rk_u8 {
+    // `a + b`
+    RK_AST_BINARY_ADD,
+    // `a - b`
+    RK_AST_BINARY_SUB,
+    // `a * b`
+    RK_AST_BINARY_MUL,
+    // `a / b`
+    RK_AST_BINARY_DIV,
+    
+    // `a += b`
+    RK_AST_BINARY_ADD_EQ,
+    // `a -= b`
+    RK_AST_BINARY_SUB_EQ,
+    // `a *= b`
+    RK_AST_BINARY_MUL_EQ,
+    // `a /= b`
+    RK_AST_BINARY_DIV_EQ,
+    
+    // `a == b`
+    RK_AST_BINARY_EQ,
+    // `a != b`
+    RK_AST_BINARY_NE,
+    // `a < b`
+    RK_AST_BINARY_LT,
+    // `a <= b`
+    RK_AST_BINARY_LE,
+    // `a > b`
+    RK_AST_BINARY_GT,
+    // `a >= b`
+    RK_AST_BINARY_GE,
+
+    // `a = b`
+    RK_AST_BINARY_SET,
+    // `a := b`
+    RK_AST_BINARY_LET,
+
+    // `a.b`
+    RK_AST_BINARY_DOT_PATH,
+    // `a: b`
+    RK_AST_BINARY_SPECIFIER,
+} RkAstBinaryKind;
+
+typedef enum: rk_u8 {
+    /// `(...)`
+    RK_AST_COMBINED_PARENS,
+    /// `[...]`
+    RK_AST_COMBINED_BRACKETS,
+    /// `{ ... }`
+    RK_AST_COMBINED_BRACES,
+} RkAstCombinedKind;
+
+typedef struct { RkAstU32 idx; RkAstU32 len; } RkAstNodeSlice;
+
+typedef RK_AST_NODE_ALIGNED struct {
+    RkSpan span;
+    RkAstNodeKind alignas(RkAstU32) tag;
+    RkAstAtomKind kind;
+} RkAstAtom;
+
+typedef RK_AST_NODE_ALIGNED struct {
+    RkSpan span;
+    RkAstNodeOffset node;
+    RkAstNodeKind alignas(RkAstU32) tag;
+    RkAstUnaryKind kind;
+} RkAstUnary;
+
+typedef RK_AST_NODE_ALIGNED struct {
+    RkSpan span;
+    RkAstNodeOffset lhs;
+    RkAstNodeOffset rhs;
+    RkAstNodeKind alignas(RkAstU32) tag;
+    RkAstBinaryKind kind;
+} RkAstBinary;
+
+typedef RK_AST_NODE_ALIGNED struct {
+    RkAstNodeKind alignas(RkAstU32) tag;
+    RkPos if_span, then_span, else_span;
+    RkAstNodeOffset cond_span, then_node, else_node;
+} RkAstIf;
+
+typedef RK_AST_NODE_ALIGNED struct {
+    RkSpan lt, rt;
+    RkAstNodeSlice nodes;
+    RkAstNodeKind alignas(RkAstU32) tag;
+    RkAstCombinedKind kind;
+} RkAstCombined;
+
+typedef RK_AST_NODE_ALIGNED struct {
+    RkAstNodeSlice nodes;
+    RkAstNodeKind alignas(RkAstU32) tag;
+    RkAstCombinedKind kind;
+} RkAstRoot;
+
+#define RK_AST_OFFSET(Node) (offsetof(Node, tag) / alignof(RkAstU32))
+
+RK_LIST(
+    RkAstRaw, RkAstRawSlice, RkAstRawIndexed,
+    rk_ast_raw, RkAstU32,
+    RkAstU32, RK_AST_U32_INVALID,
+)
+
+RK_LIST(
+    RkAstSpan, RkAstSpan__SliceWithPtr, RkAstSpanSlice,
+    rk_ast_span, RkAstU32,
+    RkAstU32, RK_AST_U32_INVALID,
+)
+
+typedef struct {
+    RkAstSpan spans;
+    RkAstRaw arena;
+    RkAstRaw ext;
+} RkAst;
+
+#define RK_AST_RAW(node) \
+    (RkAstRawSlice){.ptr = (void*)&node, .len = sizeof(node) / sizeof(RkAstU32)}
+
+#define rk_ast_push(ast, node) \
+    rk_ast_push_ext(ast, RK_AST_RAW(node), RK_AST_OFFSET(typeof(node)))
+
+static inline
+RkAstNodeId rk_ast_push_ext(
+    RkAst * const ast,
+    RkAstRawSlice const slice,
+    RkAstNodeOffset const offset
+) {
+    RkAstNodeId start = ast->arena.len;
+    rk_ast_raw_extend(&ast->arena, slice);
+    return start + offset;
+}
+
+////////////////////////////////////////
+// Compiler
+
+typedef struct {
+    char const * const exe;
+    RkDiag diag;
+} RkCompiler;
+
+typedef enum {
+    RK_ACTION_BUILD,
+    RK_ACTION_LEX,
+} RkActionKind;
+
+typedef struct {
+    char const * input;
+} RkActionBuild;
+
+typedef struct {
+    char const * input;
+} RkActionLex;
+
+typedef struct {
+    RkActionKind kind;
+    union {
+        RkActionBuild build;
+        RkActionLex lex;
+    };
+} RkAction;
+
+static inline noreturn
+void rk_diag_flush_and_exit(RkDiag * const diag, rk_i32 const code) {
+    // TODO: hardcore output
+    rk_diag_flush_and_dealloc(diag, stderr);
+    exit(code);
+}
 
 #define RK_DIAG_COMMAND_BUILD \
     RK_CYAN_BOLD "build" RK_WHITE_BOLD ", " RK_CYAN_BOLD "b" RK_MAGENTA_BOLD " <FILE>"
@@ -1717,42 +1958,6 @@ void rk_diag_can_not_load_unit(
         RK_CYAN_BOLD " --> %s" "\n" RK_CLEAN,
         msg, path
     );
-}
-
-////////////////////////////////////////
-// Compiler
-
-typedef struct {
-    char const * const exe;
-    RkDiag diag;
-} RkCompiler;
-
-typedef enum {
-    RK_ACTION_BUILD,
-    RK_ACTION_LEX,
-} RkActionKind;
-
-typedef struct {
-    char const * input;
-} RkActionBuild;
-
-typedef struct {
-    char const * input;
-} RkActionLex;
-
-typedef struct {
-    RkActionKind kind;
-    union {
-        RkActionBuild build;
-        RkActionLex lex;
-    };
-} RkAction;
-
-static inline noreturn
-void rk_diag_flush_and_exit(RkDiag * const diag, rk_i32 const code) {
-    // TODO: hardcore output
-    rk_diag_flush_and_dealloc(diag, stderr);
-    exit(code);
 }
 
 static inline
