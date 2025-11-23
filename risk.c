@@ -855,8 +855,6 @@ RkUnitLoadResult rk_unit_try_load(char const *path) {
 typedef enum: rk_u8 {
     /// End of file
     RK_TOKEN_EOF,
-    /// Illegal bytes
-    RK_TOKEN_ILLEGAL,
 
     /// (`0-9`)(`@0-9a-zA-Z_`)*
     RK_TOKEN_INTEGER,
@@ -1030,7 +1028,6 @@ static
 rk_u32 rk_token_kind_tag_name_len(RkTokenKind kind) {
     switch(kind) {
         case RK_TOKEN_EOF:                 return sizeof("eof") - 1;
-        case RK_TOKEN_ILLEGAL:             return sizeof("ill") - 1;
         
         case RK_TOKEN_FLOAT:               return sizeof("float") - 1;
         case RK_TOKEN_INTEGER:             return sizeof("integer") - 1;
@@ -1134,7 +1131,6 @@ static
 char const * rk_token_kind_tag_name(RkTokenKind kind) {
     switch(kind) {
         case RK_TOKEN_EOF:                 return "eof";
-        case RK_TOKEN_ILLEGAL:             return "ill";
         
         case RK_TOKEN_FLOAT:               return "float";
         case RK_TOKEN_INTEGER:             return "integer";
@@ -1268,6 +1264,16 @@ bool rk_is_alpha(rk_u8 b) {
 }
 
 static inline
+bool rk_is_space(rk_u8 b) {
+    return b == ' ' || b == '\t' || b == '\r' || b == '\n';
+}
+
+static inline
+bool rk_is_ascii(rk_u8 b) {
+    return b < 0x80;
+}
+
+static inline
 bool rk_is_integer_continue(rk_u8 b) {
     return rk_is_digit(b) || rk_is_alpha(b) || b == '_' || b == '@';
 }
@@ -1278,8 +1284,8 @@ bool rk_is_ident_continue(rk_u8 b) {
 }
 
 static inline
-bool rk_is_space(rk_u8 b) {
-    return b == ' ' || b == '\t' || b == '\r' || b == '\n';
+bool rk_is_ident(rk_u8 b1, rk_u8 b2) {
+    return rk_is_alpha(b1) || b1 == '_' || !rk_is_ascii(b1) || (b1 == '@' && (rk_is_ident_continue(b2) || !rk_is_ascii(b2)));
 }
 
 ////////////////////////////////////////
@@ -1346,30 +1352,42 @@ bool rk_lexer_kw(RkLexer * const lexer, char const * const kw) {
 }
 
 static inline
-bool rk_lexer_ident(RkLexer * const lexer) {
+RkTokenKind rk_lexer_ident(RkLexer * const lexer) {
     rk_u8 b1 = rk_lexer_peek(lexer, 0);
     rk_u8 b2 = rk_lexer_peek(lexer, 1);
-
-    if (rk_is_alpha(b1) || b1 == '_') {
-        lexer->idx += 1;
-    } else if (b1 == '@' && rk_is_ident_continue(b2)) {
-        lexer->idx += 2;
-    } else {
-        return false;
+    RK_ASSERT(rk_is_ident(b1, b2), "");
+    
+    for (;;) {
+        if (rk_lexer_at_eof(lexer)) break;
+        rk_u8 b = rk_lexer_peek(lexer, 0);
+        if (rk_is_ascii(b) && !rk_is_ident_continue(b)) break;
+        lexer->idx += rk_utf8_len(b);
     }
 
-    rk_lexer_eat_while(lexer, rk_is_ident_continue(b));
-    return true;
+    return RK_TOKEN_IDENT;
 }
 
 static inline
 RkTokenKind rk_lexer_number(RkLexer * const lexer) {
-    rk_lexer_eat_while(lexer, rk_is_integer_continue(b));
+    for (;;) {
+        if (rk_lexer_at_eof(lexer)) break;
+        rk_u8 b = rk_lexer_peek(lexer, 0);
+        if (rk_is_ascii(b) && !rk_is_integer_continue(b)) break;
+        lexer->idx += rk_utf8_len(b);
+    }
+    
     rk_u8 b1 = rk_lexer_peek(lexer, 0);
     rk_u8 b2 = rk_lexer_peek(lexer, 1);
     if (b1 != '.' || !rk_is_integer_continue(b2)) return RK_TOKEN_INTEGER;
     lexer->idx += 2;
-    rk_lexer_eat_while(lexer, rk_is_integer_continue(b));
+
+    for (;;) {
+        if (rk_lexer_at_eof(lexer)) break;
+        rk_u8 b = rk_lexer_peek(lexer, 0);
+        if (rk_is_ascii(b) && !rk_is_integer_continue(b)) break;
+        lexer->idx += rk_utf8_len(b);
+    }
+
     return RK_TOKEN_FLOAT;
 }
 
@@ -1412,7 +1430,8 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
     
     start = lexer->idx;
     RkTokenKind kind = RK_TOKEN_EOF;
-    rk_u8 b = rk_lexer_peek(lexer, 0);
+    rk_u8 b1 = rk_lexer_peek(lexer, 0);
+    rk_u8 b2 = rk_lexer_peek(lexer, 1);
     
     if (false) {}
     else if (rk_lexer_kw(lexer, "comptime")) kind = RK_TOKEN_COMPTIME;
@@ -1434,7 +1453,9 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
     else if (rk_lexer_kw(lexer, "pub"))      kind = RK_TOKEN_PUB;
     else if (rk_lexer_kw(lexer, "fn"))       kind = RK_TOKEN_FN;
     else if (rk_lexer_kw(lexer, "if"))       kind = RK_TOKEN_IF;
-    else if (rk_lexer_ident(lexer))          kind = RK_TOKEN_IDENT;
+    else if (rk_is_ident(b1, b2))            kind = rk_lexer_ident(lexer);
+    else if (rk_is_digit(b1))                kind = rk_lexer_number(lexer);
+    else if (rk_lexer_eat(lexer, "\""))      kind = rk_lexer_string(lexer);
     else if (rk_lexer_eat(lexer, "---"))     kind = RK_TOKEN_UNDEFINED;
     else if (rk_lexer_eat(lexer, "..."))     kind = RK_TOKEN_DOT_DOT_DOT;
     else if (rk_lexer_eat(lexer, "..<"))     kind = RK_TOKEN_DOT_DOT_LT;
@@ -1460,8 +1481,6 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
     else if (rk_lexer_eat(lexer, "::"))      kind = RK_TOKEN_COLON_COLON;
     else if (rk_lexer_eat(lexer, "|]"))      kind = RK_TOKEN_CLOSE_ATTRIBUTES;
     else if (rk_lexer_eat(lexer, "[|"))      kind = RK_TOKEN_OPEN_ATTRIBUTES;
-    else if (rk_is_digit(b))                 kind = rk_lexer_number(lexer);
-    else if (rk_lexer_eat(lexer, "\""))      kind = rk_lexer_string(lexer);
     else if (rk_lexer_eat(lexer, "@"))       kind = RK_TOKEN_AT;
     else if (rk_lexer_eat(lexer, "&"))       kind = RK_TOKEN_AND_BIT;
     else if (rk_lexer_eat(lexer, "|"))       kind = RK_TOKEN_OR_BIT;
@@ -1485,13 +1504,14 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
     else if (rk_lexer_eat(lexer, ":"))       kind = RK_TOKEN_COLON;
     else if (rk_lexer_eat(lexer, ";"))       kind = RK_TOKEN_SEMICOLON;
     else {
-        lexer->idx += rk_utf8_len(b);
-        rk_usize save = lexer->idx;
-        RkToken next = rk_lexer_next_token(lexer);
-        if (save != next.span.start || next.kind != RK_TOKEN_ILLEGAL) {
-            lexer->idx = save;
-        }
-        kind = RK_TOKEN_ILLEGAL;
+        RK_UNREACHABLE("");
+        // lexer->idx += rk_utf8_len(b1);
+        // rk_usize save = lexer->idx;
+        // RkToken next = rk_lexer_next_token(lexer);
+        // if (save != next.span.start || next.kind != RK_TOKEN_ILLEGAL) {
+        //     lexer->idx = save;
+        // }
+        // kind = RK_TOKEN_ILLEGAL;
     }
 
     RkPos len = lexer->idx - start;
