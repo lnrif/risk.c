@@ -16,8 +16,8 @@
 # Layers complete
 
 - [x] Tokens & lex
-- [ ] AST & parse
-- [ ] MIR & semantic checks 
+- [ ] AST & parse (in progress)
+- [ ] MIR & semantic checks
 - [ ] IR & lowering to concrete platform
 - [ ] ASM
 
