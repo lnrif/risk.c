@@ -1811,21 +1811,21 @@ typedef struct { RkAstU32 idx; RkAstU32 len; } RkAstNodeSlice;
     RkAstAtomKind kind;         \
 
 #define RK_AST_UNARY_FIELDS(...) \
-    RkSpan span;                 \
-    RkAstNodeOffset node;        \
+    RkPos pos;                   \
     __VA_ARGS__;                 \
     RkAstUnaryKind kind;         \
+    RkAstNodeOffset node;        \
 
 #define RK_AST_BINARY_FIELDS(...) \
-    RkSpan span;                  \
+    RkPos pos;                    \
     RkAstNodeOffset lhs;          \
     RkAstNodeOffset rhs;          \
     __VA_ARGS__;                  \
     RkAstBinaryKind kind;         \
 
 #define RK_AST_IF_FIELDS(...)                        \
-    __VA_ARGS__;                                     \
     RkPos if_pos, then_pos, else_pos;                \
+    __VA_ARGS__;                                     \
     RkAstNodeOffset cond_node, then_node, else_node; \
 
 #define RK_AST_COMBINED_FIELDS(...) \
@@ -1836,10 +1836,10 @@ typedef struct { RkAstU32 idx; RkAstU32 len; } RkAstNodeSlice;
 
 #define RK_AST_CALL_FIELDS(...) \
     RkPos lt, rt;               \
-    RkAstNodeOffset fn;         \
     RkAstNodeSlice args;        \
     __VA_ARGS__;                \
     RkAstParenKind kind;        \
+    RkAstNodeOffset fn;         \
 
 #define RK_AST_ROOT_FIELDS(...) \
     RkAstNodeSlice nodes;       \
@@ -1916,12 +1916,12 @@ RkAstAtom rk_ast_atom_from_raw(RkAstAtomRaw rw) {
 
 static inline
 RkAstUnary rk_ast_unary_from_raw(RkAstUnaryRaw rw) {
-    return (RkAstUnary){.span = rw.span, .node = rw.node, .kind = rw.kind};
+    return (RkAstUnary){.pos = rw.pos, .node = rw.node, .kind = rw.kind};
 }
 
 static inline
 RkAstBinary rk_ast_binary_from_raw(RkAstBinaryRaw rw) {
-    return (RkAstBinary){.span = rw.span, .lhs = rw.lhs, .rhs = rw.rhs, .kind = rw.kind};
+    return (RkAstBinary){.pos = rw.pos, .lhs = rw.lhs, .rhs = rw.rhs, .kind = rw.kind};
 }
 
 static inline
