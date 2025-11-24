@@ -1,3 +1,5 @@
+let std = @mod("std.rk");
+
 fn main() {
     std.print("Risk is self-known!");
 }
