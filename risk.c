@@ -639,7 +639,9 @@ RkBytes rk_file_load_or_exit(char const *path) {
 // Location in file
 
 typedef rk_u32 RkPos;
-#define RK_POS_MAX RK_U32_MAX
+typedef rk_u32 RkPosMaybe;
+#define RK_POS_NONE RK_POS_MAX
+#define RK_POS_MAX  RK_U32_MAX
 
 typedef struct {
     RkPos start;
@@ -1527,7 +1529,7 @@ RkToken rk_lexer_next_token(RkLexer * const lexer) {
 // Tokens
 
 RK_LIST(
-    RkTokenBuf, RkTokensSlice, RkTokensIndexed,
+    RkTokenBuf, RkTokenSlice, RkTokenIndexed,
     rk_tokens, RkToken,
     rk_u32, RK_U32_MAX,
 )
@@ -1681,17 +1683,6 @@ void rk_lex_display(RkLex const * const lex, RkDiag * const diag) {
 ////////////////////////////////////////
 // AST
 
-typedef rk_u32 RkAstU32;
-#define RK_AST_U32_INVALID RK_U32_MAX
-
-typedef RkAstU32 RkAstNodeId;
-#define RK_AST_NODE_Id_INVALID RK_AST_U32_INVALID
-
-typedef rk_u16 RkAstNodeOffset;
-#define RK_AST_NODE_OFFSET_INVALID RK_U16_MAX
-
-#define RK_AST_NODE_ALIGNED __attribute__((aligned(alignof(rk_u32))))
-
 typedef enum: rk_u8 {
     /// a
     RK_AST_NODE_ATOM,
@@ -1699,8 +1690,10 @@ typedef enum: rk_u8 {
     RK_AST_NODE_UNARY,
     /// a + b
     RK_AST_NODE_BINARY,
-    /// if a then b [else c]
+    /// if a then b
     RK_AST_NODE_IF,
+    /// if a then b else c
+    RK_AST_NODE_IF_ELSE,
     /// (...)
     /// [...]
     /// {...}
@@ -1709,7 +1702,7 @@ typedef enum: rk_u8 {
     /// f[a, b]
     /// f { a, b }
     RK_AST_NODE_CALL,
-    /// root file node
+    /// basically <FILE>
     RK_AST_NODE_ROOT,
 } RkAstNodeKind;
 
@@ -1747,7 +1740,7 @@ typedef enum: rk_u8 {
     RK_AST_UNARY_LET,
     // `const a`
     RK_AST_UNARY_CONST,
-    // `comptime b`
+    // `comptime a`
     RK_AST_UNARY_COMPTIME,
 } RkAstUnaryKind;
 
@@ -1803,98 +1796,78 @@ typedef enum: rk_u8 {
     RK_AST_PAREN_BRACES,
 } RkAstParenKind;
 
-typedef struct { RkAstU32 idx; RkAstU32 len; } RkAstNodeSlice;
+typedef enum: rk_u8 {
+    /// `if cond then ...`
+    RK_AST_IF_DIV_THEN,
+    /// `if (cond) ...`
+    RK_AST_IF_DIV_PARENS,
+    /// `if (cond) then ...`
+    RK_AST_IF_DIV_PARENS_THEN,
+} RkAstIfDivKind;
 
-#define RK_AST_ATOM_FIELDS(...) \
-    RkSpan span;                \
-    __VA_ARGS__;                \
-    RkAstAtomKind kind;         \
+typedef struct {
+    // ALWAYS `RK_AST_NODE_ATOM`
+    RkAstNodeKind head;
+    RkAstAtomKind kind;
+    RkPos pos;
+} RkAstAtom;
 
-#define RK_AST_UNARY_FIELDS(...) \
-    RkPos pos;                   \
-    __VA_ARGS__;                 \
-    RkAstUnaryKind kind;         \
-    RkAstNodeOffset node;        \
+typedef rk_u32 RkAstNodeId;
 
-#define RK_AST_BINARY_FIELDS(...) \
-    RkPos pos;                    \
-    RkAstNodeOffset lhs;          \
-    RkAstNodeOffset rhs;          \
-    __VA_ARGS__;                  \
-    RkAstBinaryKind kind;         \
+typedef struct {
+    RkAstUnaryKind kind;
+    RkPos pos;
+    RkAstNodeId node;
+} RkAstUnary;
 
-#define RK_AST_IF_FIELDS(...)                        \
-    RkPos if_pos, then_pos, else_pos;                \
-    __VA_ARGS__;                                     \
-    RkAstNodeOffset cond_node, then_node, else_node; \
+typedef struct {
+    RkAstBinaryKind kind;
+    RkPos pos;
+    RkAstNodeId lhs;
+    RkAstNodeId rhs;
+} RkAstBinary;
 
-#define RK_AST_COMBINED_FIELDS(...) \
-    RkPos lt, rt;                   \
-    RkAstNodeSlice nodes;           \
-    __VA_ARGS__;                    \
-    RkAstParenKind kind;            \
+typedef struct {
+    RkAstIfDivKind div;
+    union {
+        struct { RkPos lt_pos, rt_pos;   } as_parens;
+        struct { RkPos pos;              } as_then;
+        struct { RkPos rt_pos, then_pos; } as_combined;
+    };
+    RkPos if_pos;
+    RkAstNodeId cond_node, then_node;
+} RkAstIf;
 
-#define RK_AST_CALL_FIELDS(...) \
-    RkPos lt, rt;               \
-    RkAstNodeSlice args;        \
-    __VA_ARGS__;                \
-    RkAstParenKind kind;        \
-    RkAstNodeOffset fn;         \
+typedef struct {
+    RkAstIfDivKind div;
+    union {
+        struct { RkPos lt_pos, rt_pos;   } as_parens;
+        struct { RkPos pos;              } as_then;
+        struct { RkPos rt_pos, then_pos; } as_combined;
+    };
+    RkPos if_pos, else_pos;
+    RkAstNodeId cond_node, then_node, else_node;
+} RkAstIfElse;
 
-#define RK_AST_ROOT_FIELDS(...) \
-    RkAstNodeSlice nodes;       \
-    __VA_ARGS__;                \
-    RkAstParenKind kind;        \
+typedef struct {
+    RkAstParenKind kind;
+    RkPos lt, rt;
+    rk_u32 nc;
+    RkAstNodeId ns;
+} RkAstCombined;
 
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_ATOM, "");
-    RK_AST_ATOM_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind)
-} RkAstAtomRaw;
+typedef struct {
+    RkAstParenKind kind;
+    RkPos lt, rt;
+    rk_u32 nc;
+    RkAstNodeId fn;
+    RkAstNodeId ns;
+} RkAstCall;
 
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_UNARY, "");
-    RK_AST_UNARY_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind)
-} RkAstUnaryRaw;
-
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_BINARY, "");
-    RK_AST_BINARY_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind)
-} RkAstBinaryRaw;
-
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_IF, "");
-    RK_AST_IF_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind)
-} RkAstIfRaw;
-
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_COMBINED, "");
-    RK_AST_COMBINED_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind)
-} RkAstCombinedRaw;
-
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_CALL, "");
-    RK_AST_CALL_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind)
-} RkAstCallRaw;
-
-typedef RK_AST_NODE_ALIGNED struct {
-    // RK_ASSERT(node_kind == RK_AST_NODE_ROOT, "");
-    RK_AST_ROOT_FIELDS(RkAstNodeKind alignas(RkAstU32) node_kind);
-} RkAstRootRaw;
-
-static_assert(sizeof(RkAstU32) == sizeof(rk_u32), "update RkAstNodeHead");
-
-typedef RK_AST_NODE_ALIGNED struct {
-    rk_u8 alignas(RkAstU32) kind;
-    rk_u8 __pad[3];
-} RkAstNodeHead;
-
-typedef struct { RK_AST_ATOM_FIELDS()     } RkAstAtom;
-typedef struct { RK_AST_UNARY_FIELDS()    } RkAstUnary;
-typedef struct { RK_AST_BINARY_FIELDS()   } RkAstBinary;
-typedef struct { RK_AST_IF_FIELDS()       } RkAstIf;
-typedef struct { RK_AST_COMBINED_FIELDS() } RkAstCombined;
-typedef struct { RK_AST_CALL_FIELDS()     } RkAstCall;
-typedef struct { RK_AST_ROOT_FIELDS()     } RkAstRoot;
+typedef struct {
+    rk_u32 nc;
+    RkAstNodeId ns;
+} RkAstRoot;
 
 typedef struct {
     union {
@@ -1902,6 +1875,7 @@ typedef struct {
         RkAstUnary    as_unary;
         RkAstBinary   as_binary;
         RkAstIf       as_if;
+        RkAstIfElse   as_if_else;
         RkAstCombined as_combined;
         RkAstCall     as_call;
         RkAstRoot     as_root;
@@ -1909,145 +1883,52 @@ typedef struct {
     RkAstNodeKind kind;
 } RkAstNode;
 
-static inline
-RkAstAtom rk_ast_atom_from_raw(RkAstAtomRaw rw) {
-    return (RkAstAtom){.span = rw.span, .kind = rw.kind};
-}
-
-static inline
-RkAstUnary rk_ast_unary_from_raw(RkAstUnaryRaw rw) {
-    return (RkAstUnary){.pos = rw.pos, .node = rw.node, .kind = rw.kind};
-}
-
-static inline
-RkAstBinary rk_ast_binary_from_raw(RkAstBinaryRaw rw) {
-    return (RkAstBinary){.pos = rw.pos, .lhs = rw.lhs, .rhs = rw.rhs, .kind = rw.kind};
-}
-
-static inline
-RkAstIf rk_ast_if_from_raw(RkAstIfRaw rw) {
-    return (RkAstIf){
-        .if_pos    = rw.if_pos,    .then_pos  = rw.then_pos,  .else_pos  = rw.else_pos,
-        .cond_node = rw.cond_node, .then_node = rw.then_node, .else_node = rw.else_node,
-    };
-}
-
-static inline
-RkAstCombined rk_ast_combined_from_raw(RkAstCombinedRaw rw) {
-    return (RkAstCombined){.lt = rw.lt, .rt = rw.rt, .nodes = rw.nodes, .kind = rw.kind};
-}
-
-static inline
-RkAstCall rk_ast_call_from_raw(RkAstCallRaw rw) {
-    return (RkAstCall){.lt = rw.lt, .rt = rw.rt, .fn = rw.fn, .args = rw.args, .kind = rw.kind};
-}
-
-static inline
-RkAstRoot rk_ast_root_from_raw(RkAstRootRaw r) {
-    return (RkAstRoot){.nodes = r.nodes, .kind = r.kind};
-}
-
-#define RK_AST_RAW_OFFSET(Node) (offsetof(Node, node_kind) / alignof(RkAstU32))
-
 RK_LIST(
-    RkAstRaw, RkAstRawSlice, RkAstRawIndexed,
-    rk_ast_raw, RkAstU32,
-    RkAstU32, RK_AST_U32_INVALID,
+    RkAstNodeBuf, RkAstNodeSlice, RkAstNodeIndexed,
+    rk_ast_nb, RkAstNode,
+    rk_usize, RK_USZ_MAX,
 )
 
 RK_LIST(
-    RkAstSpan, RkAstSpan__SliceWithPtr, RkAstSpanSlice,
-    rk_ast_span, RkAstU32,
-    RkAstU32, RK_AST_U32_INVALID,
+    RkAstNodeIdBuf, RkAstNodeIdSlice, RkAstNodeIdIndexed,
+    rk_ast_nib, RkAstNodeId,
+    rk_usize, RK_USZ_MAX,
 )
 
 typedef struct {
-    RkAstSpan spans;
-    RkAstRaw arena;
-    RkAstRaw ext;
+    RkAstNodeBuf nodes;
+    RkAstNodeIdBuf ids;
 } RkAst;
 
-#define RK_AST_RAW(node) \
-    (RkAstRawSlice){.ptr = (void*)&node, .len = sizeof(node) / sizeof(RkAstU32)}
+////////////////////////////////////////
+// Parser
 
-#define rk_ast_push(ast, node) \
-    rk_ast_push_ext(ast, RK_AST_RAW(node), RK_AST_RAW_OFFSET(typeof(node)))
+typedef struct {
+    RkTokenSlice tokens;
+    rk_usize index;
+    // Ast
+    RkAstNodeBuf nodes;
+    RkAstNodeIdBuf ids;
+} RkParser;
 
 static inline
-RkAstNodeId rk_ast_push_ext(
-    RkAst * const ast,
-    RkAstRawSlice const slice,
-    RkAstNodeOffset const offset
-) {
-    RkAstNodeId start = ast->arena.len;
-    rk_ast_raw_extend(&ast->arena, slice);
-    return start + offset;
+RkAstNodeId rk_parser_push_node(RkParser * const parser, RkAstNode node) {
+    return rk_ast_nb_push_id(&parser->nodes, node);
 }
 
 static
-rk_usize rk_ast_node_kind_offset(RkAstNodeKind kind) {
-    switch (kind) {
-        case RK_AST_NODE_ATOM:     return RK_AST_RAW_OFFSET(RkAstAtomRaw);
-        case RK_AST_NODE_UNARY:    return RK_AST_RAW_OFFSET(RkAstUnaryRaw);
-        case RK_AST_NODE_BINARY:   return RK_AST_RAW_OFFSET(RkAstBinaryRaw);
-        case RK_AST_NODE_IF:       return RK_AST_RAW_OFFSET(RkAstIfRaw);
-        case RK_AST_NODE_COMBINED: return RK_AST_RAW_OFFSET(RkAstCombinedRaw);
-        case RK_AST_NODE_CALL:     return RK_AST_RAW_OFFSET(RkAstCallRaw);
-        case RK_AST_NODE_ROOT:     return RK_AST_RAW_OFFSET(RkAstRootRaw);
-    }
-}
-
-static inline
-RkAstNodeKind rk_ast_kind_at(RkAst const * const ast, RkAstNodeId id) {
-    RkAstNodeKind kind = (*(RkAstNodeHead*)&ast->arena.ptr[id]).kind;
-    switch (kind) {
-        case RK_AST_NODE_ATOM:
-        case RK_AST_NODE_UNARY:
-        case RK_AST_NODE_BINARY:
-        case RK_AST_NODE_IF:
-        case RK_AST_NODE_COMBINED:
-        case RK_AST_NODE_CALL:
-        case RK_AST_NODE_ROOT: return kind;
-    }
-    RK_PANIC("invalid raw kind!");
+RkAstNodeId rk_parser_atom(RkParser * const parser) {
+    RK_TODO("");
 }
 
 static
-RkAstNode rk_ast_at(RkAst const * const ast, RkAstNodeId id) {
-    RkAstNodeKind kind = rk_ast_kind_at(ast, id);
-    id -= rk_ast_node_kind_offset(kind);
-    rk_usize offset = rk_ast_node_kind_offset(kind);
-    switch (kind) {
-        case RK_AST_NODE_ATOM: {
-            RkAstAtomRaw const raw = *(RkAstAtomRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_atom = rk_ast_atom_from_raw(raw), .kind = RK_AST_NODE_ATOM};
-        } break;
-        case RK_AST_NODE_UNARY: {
-            RkAstUnaryRaw const raw = *(RkAstUnaryRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_unary = rk_ast_unary_from_raw(raw), .kind = RK_AST_NODE_UNARY};
-        } break;
-        case RK_AST_NODE_BINARY: {
-            RkAstBinaryRaw const raw = *(RkAstBinaryRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_binary = rk_ast_binary_from_raw(raw), .kind = RK_AST_NODE_BINARY};
-        } break;
-        case RK_AST_NODE_IF: {
-            RkAstIfRaw const raw = *(RkAstIfRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_if = rk_ast_if_from_raw(raw), .kind = RK_AST_NODE_IF};
-        } break;
-        case RK_AST_NODE_COMBINED: {
-            RkAstCombinedRaw const raw = *(RkAstCombinedRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_combined = rk_ast_combined_from_raw(raw), .kind = RK_AST_NODE_COMBINED};
-        } break;
-        case RK_AST_NODE_CALL: {
-            RkAstCallRaw const raw = *(RkAstCallRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_call = rk_ast_call_from_raw(raw), .kind = RK_AST_NODE_COMBINED};
-        } break;
-        case RK_AST_NODE_ROOT: {
-            RkAstRootRaw const raw = *(RkAstRootRaw*)&ast->arena.ptr[id];
-            return (RkAstNode){.as_root = rk_ast_root_from_raw(raw), .kind = RK_AST_NODE_ROOT};
-        } break;
-    }
-    RK_PANIC("invalid raw kind!");
+RkAstNodeId rk_parser_expr(RkParser * const parser) {
+    RK_TODO("");
+}
+
+static
+RkAstNodeId rk_parser_stmt(RkParser * const parser) {
+    RK_TODO("");
 }
 
 ////////////////////////////////////////
